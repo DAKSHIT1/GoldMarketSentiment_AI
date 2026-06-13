@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Gold.ai — Quantitative Gold Trading Intelligence</title>
+<meta name="description" content="Session-level XAU/USD signal engine. 72.5% OOS accuracy. LONG/SHORT/STAY COOL signals built on 6 years of rigorous backtesting."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --gold:#FFD700;--gold2:#FFA500;--dark:#06060e;--bg:#0d1020;--card:#131629;
+  --border:rgba(255,255,255,0.07);--gray:#8892A4;--green:#00E676;--red:#FF4C4C;
+  --white:#fff;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--dark);color:var(--white);overflow-x:hidden}
+
+/* ── TICKER ─────────────────────────────────────────────── */
+.ticker{background:rgba(255,215,0,0.06);border-bottom:1px solid rgba(255,215,0,0.12);
+  padding:0.5rem 2rem;display:flex;align-items:center;justify-content:center;
+  gap:1.5rem;font-size:0.8rem;color:var(--gray)}
+.ticker-live{display:flex;align-items:center;gap:0.4rem}
+.ticker-dot{width:7px;height:7px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 6px var(--green);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+.ticker-price{color:var(--white);font-weight:700;font-size:0.85rem}
+.ticker-change{color:var(--green);font-weight:600}
+
+/* ── NAV ─────────────────────────────────────────────────── */
+nav{position:sticky;top:0;z-index:100;background:rgba(6,6,14,0.92);
+  backdrop-filter:blur(20px);border-bottom:1px solid var(--border);
+  padding:0 3rem;display:flex;align-items:center;justify-content:space-between;height:64px}
+.nav-logo{display:flex;align-items:center;gap:0.6rem;text-decoration:none}
+.logo-circle{width:36px;height:36px;border-radius:10px;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  display:flex;align-items:center;justify-content:center;
+  font-weight:900;font-size:1rem;color:#000}
+.logo-text{font-size:1.15rem;font-weight:800;color:var(--white)}
+.logo-text span{color:var(--gold)}
+.nav-links{display:flex;gap:2rem}
+.nav-links a{color:var(--gray);text-decoration:none;font-size:0.88rem;font-weight:500;
+  transition:color .2s}
+.nav-links a:hover{color:var(--white)}
+.nav-actions{display:flex;align-items:center;gap:1rem}
+.btn-signin{color:var(--gray);text-decoration:none;font-size:0.88rem;font-weight:500;
+  transition:color .2s}
+.btn-signin:hover{color:var(--white)}
+.btn-launch{background:linear-gradient(135deg,var(--gold),var(--gold2));
+  color:#000;padding:0.5rem 1.3rem;border-radius:8px;text-decoration:none;
+  font-weight:700;font-size:0.88rem;transition:transform .2s,box-shadow .2s}
+.btn-launch:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(255,215,0,0.4)}
+
+/* ── HERO ─────────────────────────────────────────────────── */
+.hero{position:relative;min-height:88vh;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;
+  padding:5rem 2rem 3rem;overflow:hidden}
+.hero-bg{position:absolute;inset:0;z-index:0}
+.hero-bg canvas{width:100%;height:100%;opacity:0.18}
+.hero-content{position:relative;z-index:1;max-width:860px}
+.hero-badge{display:inline-flex;align-items:center;gap:0.5rem;
+  background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.2);
+  padding:0.4rem 1rem;border-radius:20px;font-size:0.78rem;color:var(--gold);
+  font-weight:600;margin-bottom:2rem;letter-spacing:0.04em}
+.hero h1{font-size:clamp(2.8rem,7vw,5.2rem);font-weight:900;line-height:1.08;
+  letter-spacing:-0.02em;margin-bottom:1.5rem}
+.hero h1 .white{color:var(--white)}
+.hero h1 .gold{background:linear-gradient(135deg,var(--gold),var(--gold2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero-sub{font-size:1.1rem;color:var(--gray);line-height:1.7;
+  max-width:640px;margin:0 auto 2.5rem;font-weight:400}
+.hero-buttons{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.btn-primary{background:linear-gradient(135deg,var(--gold),var(--gold2));
+  color:#000;padding:0.85rem 2rem;border-radius:10px;text-decoration:none;
+  font-weight:700;font-size:0.95rem;transition:transform .2s,box-shadow .2s;
+  display:inline-flex;align-items:center;gap:0.4rem}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(255,215,0,0.35)}
+.btn-outline{background:transparent;border:1px solid rgba(255,255,255,0.2);
+  color:var(--white);padding:0.85rem 2rem;border-radius:10px;text-decoration:none;
+  font-weight:600;font-size:0.95rem;transition:all .2s}
+.btn-outline:hover{border-color:rgba(255,215,0,0.5);color:var(--gold)}
+
+/* ── STATS ROW ───────────────────────────────────────────── */
+.stats-section{padding:3rem 3rem;background:var(--bg)}
+.stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;max-width:1100px;margin:0 auto}
+.stat-box{background:var(--card);border:1px solid var(--border);border-radius:16px;
+  padding:2rem 1.5rem;text-align:center;transition:border-color .3s,transform .3s}
+.stat-box:hover{border-color:rgba(255,215,0,0.3);transform:translateY(-4px)}
+.stat-num{font-size:2.4rem;font-weight:900;color:var(--gold);line-height:1;margin-bottom:0.4rem}
+.stat-label{font-size:0.78rem;color:var(--gray);font-weight:500;text-transform:uppercase;
+  letter-spacing:0.06em;line-height:1.4}
+.stat-sub{font-size:0.7rem;color:rgba(255,215,0,0.5);margin-top:0.3rem;font-weight:500}
+
+/* ── FEATURES ────────────────────────────────────────────── */
+.features-section{padding:5rem 3rem;max-width:1200px;margin:0 auto}
+.section-tag{font-size:0.72rem;font-weight:700;color:var(--gold);
+  text-transform:uppercase;letter-spacing:0.12em;margin-bottom:1.2rem}
+.section-title{font-size:clamp(2rem,4vw,3rem);font-weight:800;line-height:1.15;
+  margin-bottom:3.5rem}
+.section-title .gold{background:linear-gradient(135deg,var(--gold),var(--gold2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.features-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem}
+.feature-card{background:var(--card);border:1px solid var(--border);border-radius:16px;
+  padding:1.8rem;transition:border-color .3s,transform .3s;cursor:default}
+.feature-card:hover{border-color:rgba(255,215,0,0.25);transform:translateY(-3px);
+  background:rgba(19,22,41,0.9)}
+.feature-icon{width:44px;height:44px;border-radius:12px;
+  background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.2);
+  display:flex;align-items:center;justify-content:center;font-size:1.3rem;
+  margin-bottom:1.2rem}
+.feature-title{font-size:1rem;font-weight:700;color:var(--white);margin-bottom:0.6rem}
+.feature-desc{font-size:0.83rem;color:var(--gray);line-height:1.65}
+
+/* ── HOW IT WORKS ────────────────────────────────────────── */
+.hiw-section{padding:5rem 3rem;background:var(--bg)}
+.hiw-inner{max-width:1100px;margin:0 auto}
+.hiw-steps{display:grid;grid-template-columns:repeat(3,1fr);gap:2rem;margin-top:3rem}
+.hiw-step{position:relative;text-align:center;padding:2.5rem 1.5rem;
+  background:var(--card);border:1px solid var(--border);border-radius:20px}
+.hiw-step::after{content:'→';position:absolute;right:-1.4rem;top:50%;
+  transform:translateY(-50%);font-size:1.4rem;color:rgba(255,215,0,0.3);
+  font-weight:900}
+.hiw-step:last-child::after{display:none}
+.step-num{width:52px;height:52px;border-radius:50%;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  display:flex;align-items:center;justify-content:center;
+  font-weight:900;font-size:1.2rem;color:#000;margin:0 auto 1.2rem}
+.step-title{font-size:1.05rem;font-weight:700;margin-bottom:0.8rem}
+.step-desc{font-size:0.83rem;color:var(--gray);line-height:1.65}
+
+/* ── THE NUMBERS ─────────────────────────────────────────── */
+.numbers-section{padding:5rem 3rem;max-width:1100px;margin:0 auto}
+.numbers-card{background:var(--card);border:1px solid rgba(255,215,0,0.15);
+  border-radius:20px;padding:3rem;position:relative;overflow:hidden}
+.numbers-card::before{content:'';position:absolute;top:-40px;right:-40px;
+  width:220px;height:220px;background:radial-gradient(circle,rgba(255,215,0,0.08),transparent 70%);
+  border-radius:50%;pointer-events:none}
+.numbers-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2rem;margin-top:2rem}
+.number-item{border-left:2px solid rgba(255,215,0,0.2);padding-left:1.2rem}
+.number-val{font-size:1.6rem;font-weight:900;color:var(--gold);margin-bottom:0.2rem}
+.number-lbl{font-size:0.75rem;color:var(--gray);font-weight:500;line-height:1.4}
+.number-ctx{font-size:0.68rem;color:rgba(255,215,0,0.5);margin-top:0.2rem}
+
+/* ── CTA ─────────────────────────────────────────────────── */
+.cta-section{padding:6rem 3rem;text-align:center;
+  background:radial-gradient(ellipse at center,rgba(255,215,0,0.06) 0%,transparent 70%)}
+.cta-section h2{font-size:clamp(2rem,4vw,3rem);font-weight:800;margin-bottom:1rem}
+.cta-section p{color:var(--gray);font-size:1rem;margin-bottom:2.5rem}
+
+/* ── FOOTER ──────────────────────────────────────────────── */
+footer{background:var(--bg);border-top:1px solid var(--border);
+  padding:2rem 3rem;display:flex;align-items:center;justify-content:space-between;
+  font-size:0.78rem;color:var(--gray)}
+.footer-logo{display:flex;align-items:center;gap:0.5rem;font-weight:700;color:var(--white)}
+.footer-logo .logo-c{width:24px;height:24px;border-radius:6px;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  display:flex;align-items:center;justify-content:center;font-weight:900;font-size:0.7rem;color:#000}
+
+@media(max-width:900px){
+  .features-grid{grid-template-columns:1fr 1fr}
+  .hiw-steps{grid-template-columns:1fr}
+  .numbers-grid{grid-template-columns:1fr 1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .hiw-step::after{display:none}
+}
+@media(max-width:600px){
+  nav{padding:0 1.2rem}
+  .nav-links{display:none}
+  .features-grid{grid-template-columns:1fr}
+  .stats-grid{grid-template-columns:1fr 1fr}
+  .numbers-grid{grid-template-columns:1fr 1fr}
+  .hero h1{font-size:2.4rem}
+  .hero-sub{font-size:0.95rem}
+}
+</style>
+</head>
+<body>
+
+<!-- TICKER -->
+<div class="ticker">
+  <div class="ticker-live">
+    <div class="ticker-dot"></div>
+    <span>Live market intelligence</span>
+  </div>
+  <span>·</span>
+  <span class="ticker-price">XAU/USD <span id="tickerPrice">$4,238.80</span></span>
+  <span class="ticker-change" id="tickerChange">▲ +3.03%</span>
+  <span>·</span>
+  <span>GOLD SIGNAL ENGINE ACTIVE</span>
+</div>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="logo-circle">G</div>
+    <span class="logo-text">Gold<span>.ai</span></span>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#how-it-works">How It Works</a>
+    <a href="#signal-accuracy">Signal Accuracy</a>
+    <a href="#signal-accuracy">The Numbers</a>
+  </div>
+  <div class="nav-actions">
+    <a href="/login" class="btn-signin">Sign In</a>
+    <a href="/login" class="btn-launch">Launch App →</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <canvas id="heroCanvas" class="hero-bg"></canvas>
+  <div class="hero-content">
+    <div class="hero-badge">⚡ XAU/USD · Session-level signal intelligence</div>
+    <h1>
+      <span class="white">Quantitative Gold<br></span>
+      <span class="gold">Trading Intelligence</span>
+    </h1>
+    <p class="hero-sub">
+      Session-level XAU/USD analysis. Quantified confidence scoring. Market regime detection.<br>
+      Built on 6 years of rigorous backtesting across 1,628 trading sessions.
+    </p>
+    <div class="hero-buttons">
+      <a href="/login" class="btn-primary">Launch App →</a>
+      <a href="#signal-accuracy" class="btn-outline">View Signal Accuracy</a>
+    </div>
+  </div>
+</section>
+
+<!-- STATS ROW -->
+<section class="stats-section">
+  <div class="stats-grid">
+    <div class="stat-box">
+      <div class="stat-num" data-target="72.5" data-suffix="%">0%</div>
+      <div class="stat-label">Signal Accuracy</div>
+      <div class="stat-sub">OOS Forward Test 2025–26</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" data-target="499" data-suffix="">0</div>
+      <div class="stat-label">Combinations Tested</div>
+      <div class="stat-sub">26 Rules Survived → Deployed</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" data-target="4.4" data-suffix="/mo">0</div>
+      <div class="stat-label">Quality Signals / Month</div>
+      <div class="stat-sub">Precision over frequency</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-num" data-target="6" data-suffix=" Yrs">0</div>
+      <div class="stat-label">Historical Data Tested</div>
+      <div class="stat-sub">$1,472 – $5,414 · Jan 2020–Mar 2026</div>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features-section" id="features">
+  <div class="section-tag">PLATFORM</div>
+  <div class="section-title">
+    Built for traders who treat<br>
+    <span class="gold">precision as alpha.</span>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="feature-icon">⚡</div>
+      <div class="feature-title">Quantitative Signal Engine</div>
+      <div class="feature-desc">LONG / SHORT / STAY COOL signals from 26 high-confidence rules — tested across 1,628 XAU/USD sessions with zero look-ahead bias.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🎯</div>
+      <div class="feature-title">Confidence Score Engine</div>
+      <div class="feature-desc">OOS-calibrated accuracy on every signal. LONG: 72.5% · L4 SHORT overextension: 72.7%. No guessing — every signal is quantified.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📊</div>
+      <div class="feature-title">Regime Detection</div>
+      <div class="feature-desc">Identifies BULLISH / BEARISH / RANGING market states each session. Know when to look for trades — and when to stay cool.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📰</div>
+      <div class="feature-title">Real-Time Gold News</div>
+      <div class="feature-desc">Curated high-impact gold market news — geopolitical events, Fed decisions, inflation data, and World Gold Council updates.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📅</div>
+      <div class="feature-title">Economic Calendar</div>
+      <div class="feature-desc">Key macro events with impact ratings. CPI, NFP, Fed rate decisions, DXY movements. Know what moves gold before it moves.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🧮</div>
+      <div class="feature-title">Risk Management Tools</div>
+      <div class="feature-desc">Position sizing calculator, Risk:Reward calculator, and drawdown analysis — built directly into the dashboard. No external tools needed.</div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="hiw-section" id="how-it-works">
+  <div class="hiw-inner">
+    <div class="section-tag">HOW IT WORKS</div>
+    <div class="section-title">Three steps from data<br>to <span class="gold">signal clarity.</span></div>
+    <div class="hiw-steps">
+      <div class="hiw-step">
+        <div class="step-num">1</div>
+        <div class="step-title">🔍 Data Engine</div>
+        <div class="step-desc">1,628 daily XAU/USD sessions processed. EMA slope, VWAP slope, DXY slope, and our 8-level price structure (U1–U8 upper, L1–L8 lower) computed for every session.</div>
+      </div>
+      <div class="hiw-step">
+        <div class="step-num">2</div>
+        <div class="step-title">⚡ Signal Engine</div>
+        <div class="step-desc">499 rule combinations tested. 26 survived rigorous OOS validation. System outputs LOOK FOR LONGS, LOOK FOR SHORTS, or STAY COOL with a calibrated confidence score.</div>
+      </div>
+      <div class="hiw-step">
+        <div class="step-num">3</div>
+        <div class="step-title">📊 You Execute</div>
+        <div class="step-desc">You get the session bias, market regime, level breakdown (U1–L8 pills), and relevant news. You decide entries manually — with full quantitative context.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- THE NUMBERS -->
+<section class="numbers-section" id="signal-accuracy">
+  <div class="section-tag">THE NUMBERS</div>
+  <div class="section-title">Real results. Real data. <span class="gold">No hype.</span></div>
+  <div class="numbers-card">
+    <div style="font-size:0.82rem;color:var(--gray);margin-bottom:0.5rem">
+      Out-of-sample forward test · March 2025 – March 2026 · XAU/USD daily sessions
+    </div>
+    <div class="numbers-grid">
+      <div class="number-item">
+        <div class="number-val">72.5%</div>
+        <div class="number-lbl">LONG Signal Accuracy</div>
+        <div class="number-ctx">95 of 131 signals · OOS only</div>
+      </div>
+      <div class="number-item">
+        <div class="number-val">72.7%</div>
+        <div class="number-lbl">L4 Overextension SHORT</div>
+        <div class="number-ctx">Strong OOS signals only</div>
+      </div>
+      <div class="number-item">
+        <div class="number-val">+4.77%</div>
+        <div class="number-lbl">Avg Peak Gain (LONG)</div>
+        <div class="number-ctx">~$92/oz per signal</div>
+      </div>
+      <div class="number-item">
+        <div class="number-val">+2.34%</div>
+        <div class="number-lbl">Avg Net Return (LONG)</div>
+        <div class="number-ctx">~$45/oz · 10-session hold</div>
+      </div>
+      <div class="number-item">
+        <div class="number-val">4.4</div>
+        <div class="number-lbl">Signals / Month</div>
+        <div class="number-ctx">Quality over quantity</div>
+      </div>
+      <div class="number-item">
+        <div class="number-val">39.7%</div>
+        <div class="number-lbl">LONG signals with &gt;5% peak</div>
+        <div class="number-ctx">Big move sessions</div>
+      </div>
+      <div class="number-item">
+        <div class="number-val">1,628</div>
+        <div class="number-lbl">Sessions Tested</div>
+        <div class="number-ctx">Jan 2020 – Mar 2026</div>
+      </div>
+      <div class="number-item">
+        <div class="number-val">499→26</div>
+        <div class="number-lbl">Rules: Tested → Deployed</div>
+        <div class="number-ctx">Rigorous survival filter</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2>Ready to trade XAU/USD<br><span style="background:linear-gradient(135deg,var(--gold),var(--gold2));-webkit-background-clip:text;-webkit-text-fill-color:transparent">with precision?</span></h2>
+  <p>Get the session bias, level breakdown, and news — before the market opens.</p>
+  <a href="/login" class="btn-primary" style="font-size:1rem;padding:1rem 2.5rem">Launch Gold.ai →</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">
+    <div class="logo-c">G</div>
+    Gold.ai
+  </div>
+  <div>© 2026 Gold.ai · Built by <strong style="color:var(--gold)">Dakshit Katakam</strong> · XAU/USD only · For educational purposes</div>
+  <div>v1.0 Antigravity</div>
+</footer>
+
+<script>
+// ── Animated counter ──────────────────────────────────────
+function animateCounters(){
+  document.querySelectorAll('[data-target]').forEach(el=>{
+    const target=parseFloat(el.dataset.target);
+    const suffix=el.dataset.suffix||'';
+    const isDecimal=el.dataset.target.includes('.');
+    let current=0;const duration=1800;const step=16;
+    const increment=target/(duration/step);
+    const timer=setInterval(()=>{
+      current+=increment;
+      if(current>=target){current=target;clearInterval(timer)}
+      el.textContent=(isDecimal?current.toFixed(1):Math.floor(current))+suffix;
+    },step);
+  });
+}
+const obs=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{if(e.isIntersecting){animateCounters();obs.disconnect()}});
+},{threshold:0.3});
+obs.observe(document.querySelector('.stats-grid'));
+
+// ── Candlestick BG animation ─────────────────────────────
+const canvas=document.getElementById('heroCanvas');
+const ctx=canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=canvas.parentElement.offsetHeight}
+resize();window.addEventListener('resize',resize);
+
+const candles=[];
+function makeCandle(x){
+  const open=Math.random()*200+3800;
+  const close=open+(Math.random()-0.48)*80;
+  const high=Math.max(open,close)+Math.random()*40;
+  const low=Math.min(open,close)-Math.random()*40;
+  return{x,open,close,high,low,w:18,speed:0.3+Math.random()*0.3};
+}
+for(let i=0;i<40;i++)candles.push(makeCandle(i*30+20));
+
+function drawCandles(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const scale=canvas.height/300;
+  const base=canvas.height*0.6;
+  candles.forEach(c=>{
+    const bull=c.close>=c.open;
+    const color=bull?'rgba(0,230,118,0.5)':'rgba(255,76,76,0.5)';
+    const oy=(4100-c.open)*scale*0.4+base;
+    const cy=(4100-c.close)*scale*0.4+base;
+    const hy=(4100-c.high)*scale*0.4+base;
+    const ly=(4100-c.low)*scale*0.4+base;
+    ctx.strokeStyle=color;ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(c.x+c.w/2,hy);ctx.lineTo(c.x+c.w/2,ly);ctx.stroke();
+    ctx.fillStyle=color;
+    ctx.fillRect(c.x,Math.min(oy,cy),c.w,Math.max(2,Math.abs(cy-oy)));
+    c.x-=c.speed;
+    if(c.x+c.w<0)Object.assign(c,makeCandle(canvas.width+20));
+  });
+  requestAnimationFrame(drawCandles);
+}
+drawCandles();
+
+// ── Live price ticker (free API) ──────────────────────────
+async function fetchPrice(){
+  try{
+    const r=await fetch('https://api.metals.live/v1/spot');
+    const d=await r.json();
+    if(d&&d[0]&&d[0].gold){
+      const p=d[0].gold;
+      document.getElementById('tickerPrice').textContent='$'+p.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    }
+  }catch(e){}
+}
+fetchPrice();setInterval(fetchPrice,30000);
+</script>
+</body>
+</html>

@@ -1,0 +1,1013 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Gold.ai — Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --gold:#FFD700;--gold2:#FFA500;--dark:#06060e;--bg:#0d1020;--card:#131629;
+  --card2:#0f1225;--border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.04);
+  --gray:#8892A4;--green:#00E676;--red:#FF4C4C;--white:#fff;
+}
+html,body{height:100%;overflow:hidden;font-family:'Inter',sans-serif;background:var(--dark);color:var(--white)}
+
+/* ── LAYOUT ──────────────────────────────────────────────── */
+.app{display:flex;height:100vh}
+
+/* ── SIDEBAR — AURUM style ───────────────────────────────── */
+.sidebar{width:220px;min-width:220px;background:#090a17;border-right:1px solid rgba(255,255,255,0.06);
+  display:flex;flex-direction:column;padding:0;overflow-y:auto;position:relative;z-index:10}
+.sb-logo{display:flex;align-items:center;gap:0.65rem;padding:1.3rem 1.3rem 1rem;
+  text-decoration:none;border-bottom:1px solid rgba(255,255,255,0.05);margin-bottom:0.5rem}
+.sb-logo-circle{width:32px;height:32px;border-radius:9px;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  display:flex;align-items:center;justify-content:center;
+  font-weight:900;font-size:0.9rem;color:#000;flex-shrink:0}
+.sb-logo-text{font-size:1.05rem;font-weight:800;color:var(--white)}
+.sb-logo-text span{color:var(--gold)}
+/* No section headers — AURUM style */
+.sb-item{display:flex;align-items:center;gap:0.75rem;padding:0.75rem 1.1rem;
+  border-radius:10px;margin:0.1rem 0.7rem;cursor:pointer;font-size:0.88rem;
+  font-weight:500;color:var(--gray);transition:all .18s;text-decoration:none;
+  position:relative}
+.sb-item:hover{background:rgba(255,255,255,0.04);color:var(--white)}
+.sb-item.active{background:rgba(255,255,255,0.07);color:var(--white);font-weight:600}
+.sb-item.active::before{content:'';position:absolute;left:0;top:20%;bottom:20%;
+  width:3px;border-radius:0 2px 2px 0;background:var(--gold)}
+.sb-item svg{flex-shrink:0;opacity:0.6;transition:opacity .18s}
+.sb-item:hover svg,.sb-item.active svg{opacity:1}
+.sb-item.active svg{stroke:var(--gold)}
+.sb-dot{width:7px;height:7px;border-radius:50%;background:var(--gold);
+  box-shadow:0 0 6px var(--gold);margin-left:auto;flex-shrink:0}
+.sb-spacer{flex:1}
+.sb-profile{padding:1rem 1.3rem;border-top:1px solid rgba(255,255,255,0.06);margin-top:0.5rem}
+.sb-user{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.7rem}
+.sb-avatar{width:36px;height:36px;border-radius:50%;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:0.75rem;color:#000;flex-shrink:0}
+.sb-name{font-size:0.82rem;font-weight:600;color:var(--white);line-height:1.3}
+.sb-role{font-size:0.68rem;color:var(--gray)}
+.sb-signout{font-size:0.76rem;color:var(--gray);text-decoration:none;
+  display:flex;align-items:center;gap:0.4rem;transition:color .2s;padding:0.1rem 0}
+.sb-signout:hover{color:var(--red)}
+
+/* ── MAIN CONTENT ────────────────────────────────────────── */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--dark)}
+
+/* ── TOPBAR ──────────────────────────────────────────────── */
+.topbar{height:52px;min-height:52px;background:#0a0b18;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;padding:0 1.5rem;gap:1rem}
+.topbar-price{display:flex;align-items:center;gap:0.7rem;margin-left:auto}
+.price-symbol{font-size:0.78rem;font-weight:700;color:var(--gray)}
+.price-val{font-size:1rem;font-weight:800;color:var(--white)}
+.price-chg{font-size:0.78rem;font-weight:700;padding:0.2rem 0.5rem;border-radius:4px}
+.price-chg.up{background:rgba(0,230,118,0.12);color:var(--green)}
+.price-chg.dn{background:rgba(255,76,76,0.12);color:var(--red)}
+.topbar-dot{width:7px;height:7px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 6px var(--green);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.3}}
+.topbar-time{font-size:0.78rem;color:var(--gray);font-weight:500}
+
+/* ── PANELS ──────────────────────────────────────────────── */
+.panels{flex:1;overflow-y:auto;padding:1.2rem 1.5rem}
+.panel{display:none;animation:fadeIn .2s ease}
+.panel.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ── CHART PANEL ─────────────────────────────────────────── */
+.chart-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.chart-title{display:flex;align-items:center;gap:0.8rem}
+.chart-symbol{font-size:1.3rem;font-weight:800;color:var(--white)}
+.chart-live-badge{background:rgba(0,230,118,0.12);border:1px solid rgba(0,230,118,0.3);
+  color:var(--green);font-size:0.65rem;font-weight:700;padding:0.18rem 0.5rem;
+  border-radius:4px;letter-spacing:0.08em}
+.chart-sub{font-size:0.75rem;color:var(--gray)}
+.tf-buttons{display:flex;gap:0.4rem}
+.tf-btn{padding:0.35rem 0.75rem;border-radius:6px;border:1px solid var(--border2);
+  background:rgba(255,255,255,0.04);color:var(--gray);font-size:0.78rem;font-weight:600;
+  cursor:pointer;transition:all .15s;font-family:'Inter',sans-serif}
+.tf-btn:hover{border-color:rgba(255,215,0,0.3);color:var(--gold)}
+.tf-btn.active{background:rgba(255,215,0,0.12);border-color:rgba(255,215,0,0.4);color:var(--gold)}
+.tv-wrap{border-radius:14px;overflow:hidden;border:1px solid var(--border);height:500px;margin-bottom:1rem}
+.chart-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:0.8rem;margin-bottom:1rem}
+.cs-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:0.9rem 1rem}
+.cs-label{font-size:0.65rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.3rem}
+.cs-val{font-size:1rem;font-weight:700;color:var(--white)}
+
+/* ── SIGNAL HERO ─────────────────────────────────────────── */
+.signal-hero{border-radius:16px;padding:2rem;margin-bottom:1.2rem;position:relative;overflow:hidden;
+  border:1px solid var(--border);background:var(--card)}
+.signal-hero.long-bg{border-color:rgba(0,230,118,0.2);background:linear-gradient(135deg,rgba(0,230,118,0.04),rgba(19,22,41,1))}
+.signal-hero.short-bg{border-color:rgba(255,76,76,0.2);background:linear-gradient(135deg,rgba(255,76,76,0.04),rgba(19,22,41,1))}
+.signal-hero.neutral-bg{border-color:rgba(255,215,0,0.15);background:linear-gradient(135deg,rgba(255,215,0,0.03),rgba(19,22,41,1))}
+.regime-pill{display:inline-flex;align-items:center;gap:0.4rem;padding:0.3rem 0.8rem;
+  border-radius:20px;font-size:0.7rem;font-weight:700;letter-spacing:0.06em;margin-bottom:1rem}
+.regime-bull{background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.25);color:var(--green)}
+.regime-bear{background:rgba(255,76,76,0.1);border:1px solid rgba(255,76,76,0.25);color:var(--red)}
+.regime-range{background:rgba(255,215,0,0.1);border:1px solid rgba(255,215,0,0.25);color:var(--gold)}
+.signal-hero-body{display:flex;align-items:flex-start;justify-content:space-between;gap:1.5rem}
+.signal-left{flex:1}
+.signal-main-label{font-size:0.72rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.4rem}
+.signal-direction{font-size:2.5rem;font-weight:900;line-height:1;margin-bottom:0.6rem}
+.signal-direction.long{color:var(--green)}
+.signal-direction.short{color:var(--red)}
+.signal-direction.neutral{color:var(--gold)}
+.signal-reason{font-size:0.82rem;color:var(--gray);margin-bottom:0.8rem;line-height:1.5}
+.sig-chips{display:flex;flex-wrap:wrap;gap:0.4rem}
+.sig-chip{padding:0.25rem 0.65rem;border-radius:20px;font-size:0.7rem;font-weight:600;
+  border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--gray)}
+.sig-chip.long-chip{background:rgba(0,230,118,0.08);border-color:rgba(0,230,118,0.2);color:var(--green)}
+.sig-chip.short-chip{background:rgba(255,76,76,0.08);border-color:rgba(255,76,76,0.2);color:var(--red)}
+.sig-chip.neutral-chip{background:rgba(255,215,0,0.08);border-color:rgba(255,215,0,0.2);color:var(--gold)}
+.conf-ring-wrap{display:flex;flex-direction:column;align-items:center;gap:0.3rem}
+.conf-ring-svg{transform:rotate(-90deg)}
+.conf-ring-text{text-align:center;margin-top:-10px}
+.conf-ring-val{font-size:1.3rem;font-weight:800;color:var(--gold)}
+.conf-ring-sub{font-size:0.65rem;color:var(--gray)}
+
+/* ── INDICATOR CARD ──────────────────────────────────────── */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.2rem}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.card-title{font-size:0.85rem;font-weight:700;color:var(--white)}
+.card-badge{font-size:0.65rem;color:var(--gray);background:rgba(255,255,255,0.05);
+  padding:0.2rem 0.5rem;border-radius:4px}
+.ind-row{display:flex;align-items:center;justify-content:space-between;
+  padding:0.65rem 0;border-bottom:1px solid var(--border2)}
+.ind-row:last-child{border-bottom:none}
+.ind-left{display:flex;align-items:center;gap:0.6rem}
+.ind-ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;font-size:0.9rem}
+.ind-ico.bull{background:rgba(0,230,118,0.1)}
+.ind-ico.bear{background:rgba(255,76,76,0.1)}
+.ind-ico.neutral{background:rgba(255,255,255,0.05)}
+.ind-name{font-size:0.8rem;font-weight:600;color:var(--white)}
+.ind-desc{font-size:0.65rem;color:var(--gray)}
+.ind-val{font-size:0.78rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:6px}
+.ind-val.bull{background:rgba(0,230,118,0.1);color:var(--green)}
+.ind-val.bear{background:rgba(255,76,76,0.1);color:var(--red)}
+.ind-val.neutral{background:rgba(255,255,255,0.06);color:var(--gray)}
+
+/* ── HISTORY TABLE ───────────────────────────────────────── */
+.table-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.2rem;overflow:hidden}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:0.8rem}
+th{text-align:left;padding:0.6rem 0.8rem;color:var(--gray);font-weight:600;
+  font-size:0.7rem;text-transform:uppercase;letter-spacing:0.06em;
+  border-bottom:1px solid var(--border)}
+td{padding:0.65rem 0.8rem;border-bottom:1px solid var(--border2)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:rgba(255,255,255,0.02)}
+.dir-badge{padding:0.2rem 0.55rem;border-radius:4px;font-size:0.68rem;font-weight:700}
+.dir-LONG{background:rgba(0,230,118,0.1);color:var(--green)}
+.dir-SHORT{background:rgba(255,76,76,0.1);color:var(--red)}
+.dir-NEUTRAL{background:rgba(255,215,0,0.08);color:var(--gold)}
+
+/* ── NEWS GRID ───────────────────────────────────────────── */
+.news-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.news-card{background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:1.2rem;transition:border-color .2s,transform .2s;cursor:pointer}
+.news-card:hover{border-color:rgba(255,215,0,0.2);transform:translateY(-2px)}
+.news-src{font-size:0.65rem;color:var(--gray);font-weight:600;
+  text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem}
+.news-title{font-size:0.9rem;font-weight:600;color:var(--white);
+  line-height:1.45;margin-bottom:0.6rem}
+.news-desc{font-size:0.78rem;color:var(--gray);line-height:1.5}
+.news-time{font-size:0.65rem;color:var(--gray);margin-top:0.6rem}
+
+/* ── PERF CARDS ──────────────────────────────────────────── */
+.perf-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.2rem}
+.perf-card{background:var(--card);border:1px solid var(--border);border-radius:14px;
+  padding:1.5rem;text-align:center}
+.perf-ico{font-size:1.8rem;margin-bottom:0.7rem}
+.perf-val{font-size:1.8rem;font-weight:900;margin-bottom:0.3rem}
+.perf-lbl{font-size:0.72rem;color:var(--gray);font-weight:600;
+  text-transform:uppercase;letter-spacing:0.06em}
+.perf-sub{font-size:0.68rem;color:rgba(136,146,164,0.6);margin-top:0.2rem}
+
+/* ── RETRACE CARD ────────────────────────────────────────── */
+.retrace-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.2rem}
+.retrace-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.2rem}
+.retrace-item{display:flex;align-items:center;justify-content:space-between;
+  padding:0.55rem 0;border-bottom:1px solid var(--border2);font-size:0.8rem}
+.retrace-item:last-child{border-bottom:none}
+.retrace-label{color:var(--gray)}
+.retrace-value{font-weight:600;color:var(--white)}
+
+/* ── TOOLS GRID ──────────────────────────────────────────── */
+.tools-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.tool-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.3rem}
+.tool-title{font-size:0.9rem;font-weight:700;color:var(--white);margin-bottom:1rem}
+.tool-field{margin-bottom:0.8rem}
+.tool-field label{display:block;font-size:0.72rem;color:var(--gray);margin-bottom:0.3rem;font-weight:500}
+.tool-field input,.tool-field select{width:100%;background:rgba(255,255,255,0.04);
+  border:1px solid var(--border);border-radius:8px;padding:0.55rem 0.75rem;
+  color:var(--white);font-size:0.82rem;font-family:'Inter',sans-serif;
+  transition:border-color .2s;outline:none}
+.tool-field input:focus,.tool-field select:focus{border-color:rgba(255,215,0,0.4)}
+.calc-btn{width:100%;padding:0.7rem;border-radius:8px;border:none;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  color:#000;font-weight:700;font-size:0.85rem;cursor:pointer;
+  font-family:'Inter',sans-serif;margin-top:0.3rem;transition:transform .15s}
+.calc-btn:hover{transform:translateY(-1px)}
+.result-box{margin-top:0.8rem;padding:0.8rem;background:rgba(255,255,255,0.03);
+  border:1px solid var(--border2);border-radius:8px}
+.result-row{display:flex;justify-content:space-between;padding:0.3rem 0;font-size:0.78rem}
+.result-label{color:var(--gray)}
+.result-value{color:var(--gold);font-weight:700}
+
+/* ── SETTINGS ────────────────────────────────────────────── */
+.settings-grid{display:grid;gap:1rem;max-width:700px}
+.settings-section{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.4rem}
+.settings-title{font-size:0.88rem;font-weight:700;color:var(--white);margin-bottom:1.1rem;
+  display:flex;align-items:center;gap:0.5rem}
+.profile-row{display:flex;align-items:center;gap:1.3rem;margin-bottom:1.2rem}
+.profile-avatar{width:64px;height:64px;border-radius:50%;
+  background:linear-gradient(135deg,var(--gold),var(--gold2));
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.3rem;font-weight:900;color:#000;flex-shrink:0}
+.profile-name{font-size:1.1rem;font-weight:700;color:var(--white);margin-bottom:0.2rem}
+.profile-role{font-size:0.78rem;color:var(--gray)}
+.profile-email{font-size:0.73rem;color:var(--gray);margin-top:0.15rem}
+.settings-row{display:flex;justify-content:space-between;align-items:center;
+  padding:0.7rem 0;border-bottom:1px solid var(--border2);font-size:0.82rem}
+.settings-row:last-child{border-bottom:none}
+.settings-key{color:var(--gray)}
+.settings-val{color:var(--white);font-weight:500}
+.settings-val.gold{color:var(--gold)}
+
+/* ── PANEL HEADERS ───────────────────────────────────────── */
+.panel-hdr{margin-bottom:1.2rem}
+.panel-title{font-size:1.2rem;font-weight:800;color:var(--white)}
+.panel-sub{font-size:0.78rem;color:var(--gray);margin-top:0.2rem}
+
+/* ── SECTION DIVIDER ─────────────────────────────────────── */
+.section-divider{display:flex;align-items:center;gap:0.75rem;margin:1.2rem 0 0.8rem}
+.section-divider .line{width:3px;height:20px;background:linear-gradient(180deg,var(--gold),var(--gold2));border-radius:2px}
+.section-divider .text{font-size:0.82rem;font-weight:700;color:var(--gold)}
+
+/* ── PROGRESS ────────────────────────────────────────────── */
+.progress-wrap{height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-top:0.4rem}
+.progress-fill{height:100%;border-radius:2px;transition:width 1s ease}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══ SIDEBAR — AURUM style ════════════════════════════ -->
+  <nav class="sidebar">
+    <a href="/" class="sb-logo">
+      <div class="sb-logo-circle">G</div>
+      <span class="sb-logo-text">Gold<span>.ai</span></span>
+    </a>
+    <div class="sb-item active" data-panel="panel-chart" onclick="showPanel('panel-chart',this)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Dashboard<span class="sb-dot"></span>
+    </div>
+    <div class="sb-item" data-panel="panel-signals" onclick="showPanel('panel-signals',this)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      Signals
+    </div>
+    <div class="sb-item" data-panel="panel-news" onclick="showPanel('panel-news',this)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8M15 18h-5M10 6h8v4h-8z"/></svg>
+      News Feed
+    </div>
+    <div class="sb-item" data-panel="panel-calendar" onclick="showPanel('panel-calendar',this)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Economic Calendar
+    </div>
+    <div class="sb-item" data-panel="panel-performance" onclick="showPanel('panel-performance',this)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Performance
+    </div>
+    <div class="sb-item" data-panel="panel-tools" onclick="showPanel('panel-tools',this)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Calculators
+    </div>
+    <div class="sb-item" data-panel="panel-settings" onclick="showPanel('panel-settings',this)">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Settings
+    </div>
+    <div class="sb-spacer"></div>
+    <div class="sb-profile">
+      <div class="sb-user">
+        <div class="sb-avatar">DK</div>
+        <div>
+          <div class="sb-name">Dakshit Katakam</div>
+          <div class="sb-role">Signal Analyst</div>
+        </div>
+      </div>
+      <a href="/logout" class="sb-signout">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sign Out
+      </a>
+    </div>
+  </nav>
+
+  <!-- ══ MAIN ══════════════════════════════════════════════ -->
+  <div class="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <div class="topbar-dot"></div>
+      <span style="font-size:0.78rem;color:var(--gray);font-weight:600">Live</span>
+      <div class="topbar-price">
+        <span class="price-symbol">XAU/USD</span>
+        <span class="price-val" id="topPrice">$4,238.80</span>
+        <span class="price-chg up" id="topChg">+3.03%</span>
+      </div>
+      <div style="margin-left:1rem;font-size:0.65rem;color:var(--gray)">OANDA</div>
+      <div class="topbar-time" style="margin-left:auto" id="topTime"></div>
+    </div>
+
+    <!-- PANELS -->
+    <div class="panels">
+
+      <!-- ══ CHART PANEL ════════════════════════════════════ -->
+      <div class="panel active" id="panel-chart">
+        <div class="chart-header">
+          <div class="chart-title">
+            <div>
+              <div style="display:flex;align-items:center;gap:0.7rem">
+                <span class="chart-symbol">XAU/USD</span>
+                <span class="chart-live-badge">LIVE</span>
+              </div>
+              <div class="chart-sub">Gold Spot · OANDA · 15-minute candles</div>
+            </div>
+          </div>
+          <div class="tf-buttons">
+            <button class="tf-btn active" data-interval="15" onclick="switchTF(this)">15m</button>
+            <button class="tf-btn" data-interval="60" onclick="switchTF(this)">1H</button>
+            <button class="tf-btn" data-interval="240" onclick="switchTF(this)">4H</button>
+            <button class="tf-btn" data-interval="D" onclick="switchTF(this)">1D</button>
+          </div>
+        </div>
+
+        <!-- TradingView Widget + Level Panel side-by-side -->
+        <div style="display:flex;gap:0.8rem;height:510px;margin-bottom:1rem">
+
+          <!-- TradingView Chart (left) -->
+          <div class="tv-wrap" style="flex:1;height:510px;margin-bottom:0">
+            <div id="tv_chart_container" style="height:510px"></div>
+          </div>
+
+          <!-- Our Level Lines Panel (right) -->
+          <div id="levelPanel" style="width:130px;flex-shrink:0;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:0.8rem 0.6rem;display:flex;flex-direction:column;overflow:hidden;position:relative">
+            <div style="font-size:0.62rem;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem;text-align:center">SESSION LEVELS</div>
+            <div style="font-size:0.58rem;color:rgba(136,146,164,0.6);text-align:center;margin-bottom:0.5rem" id="lvlDate">Loading…</div>
+            <!-- Level items rendered here -->
+            <div id="levelsList" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px"></div>
+            <div style="margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid var(--border2)">
+              <div style="font-size:0.58rem;color:var(--gray);text-align:center">Step: <span id="lvlStep" style="color:var(--white)">$—</span></div>
+              <div style="font-size:0.58rem;color:var(--gray);text-align:center;margin-top:2px">ATR: <span id="lvlATR" style="color:var(--gold)">$—</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Market Stats Row -->
+        <div class="chart-stats">
+          <div class="cs-card">
+            <div class="cs-label">Open</div>
+            <div class="cs-val" id="statOpen">—</div>
+          </div>
+          <div class="cs-card">
+            <div class="cs-label">High</div>
+            <div class="cs-val" style="color:var(--green)" id="statHigh">—</div>
+          </div>
+          <div class="cs-card">
+            <div class="cs-label">Low</div>
+            <div class="cs-val" style="color:var(--red)" id="statLow">—</div>
+          </div>
+          <div class="cs-card">
+            <div class="cs-label">24h Change</div>
+            <div class="cs-val" id="statChange">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SIGNALS PANEL ══════════════════════════════════ -->
+      <div class="panel" id="panel-signals">
+        <div class="panel-hdr">
+          <div class="panel-title">⚡ Signals</div>
+          <div class="panel-sub">Session bias · Confidence score · Active conditions</div>
+        </div>
+
+        <!-- Signal Hero Card -->
+        <div class="signal-hero neutral-bg" id="sigHero">
+          <div class="regime-pill regime-range" id="regimePill">⊙ RANGING MARKET</div>
+          <div class="signal-hero-body">
+            <div class="signal-left">
+              <div class="signal-main-label">Session Bias</div>
+              <div class="signal-direction neutral" id="sigDir">STAY COOL</div>
+              <div class="signal-reason" id="sigReason">Loading signal…</div>
+              <div class="sig-chips" id="sigChips">
+                <span class="sig-chip neutral-chip">⏳ Loading…</span>
+              </div>
+            </div>
+            <div class="conf-ring-wrap">
+              <svg class="conf-ring-svg" width="90" height="90" viewBox="0 0 90 90">
+                <circle cx="45" cy="45" r="36" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="7"/>
+                <circle id="confArc" cx="45" cy="45" r="36" fill="none"
+                  stroke="var(--gold)" stroke-width="7" stroke-linecap="round"
+                  stroke-dasharray="226" stroke-dashoffset="226"
+                  style="transition:stroke-dashoffset 1s ease"/>
+              </svg>
+              <div class="conf-ring-text">
+                <div class="conf-ring-val" id="confVal">—</div>
+                <div class="conf-ring-sub">OOS Accuracy</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Indicators + Level Pills -->
+        <div class="two-col">
+          <div class="card">
+            <div class="card-hdr">
+              <div class="card-title">📡 Session Indicators</div>
+              <div class="card-badge" id="lastSess">Latest session</div>
+            </div>
+            <div id="indicatorsBody">
+              <div class="ind-row"><div class="ind-left"><div class="ind-ico neutral">📈</div><div><div class="ind-name">EMA Slope</div><div class="ind-desc">Multi-session trend</div></div></div><div class="ind-val neutral">—</div></div>
+              <div class="ind-row"><div class="ind-left"><div class="ind-ico neutral">⚖️</div><div><div class="ind-name">VWAP Slope</div><div class="ind-desc">Intraday fair value</div></div></div><div class="ind-val neutral">—</div></div>
+              <div class="ind-row"><div class="ind-left"><div class="ind-ico neutral">💵</div><div><div class="ind-name">DXY (US Dollar)</div><div class="ind-desc">Rising = bearish gold</div></div></div><div class="ind-val neutral">—</div></div>
+            </div>
+            <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border2)">
+              <div style="font-size:0.65rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.5rem;font-weight:600">Levels Broken This Session</div>
+              <div id="levelsPills" style="display:flex;flex-wrap:wrap;gap:0.4rem">
+                <span style="color:var(--gray);font-size:0.75rem">Loading…</span>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-hdr">
+              <div class="card-title">🎯 Signal Confidence</div>
+              <div class="card-badge">OOS Validated</div>
+            </div>
+            <div style="padding:0.5rem 0">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.8rem">
+                <span style="font-size:0.78rem;color:var(--gray)">LONG Accuracy (OOS)</span>
+                <span style="font-size:0.85rem;font-weight:700;color:var(--green)">72.5%</span>
+              </div>
+              <div class="progress-wrap"><div class="progress-fill" style="width:72.5%;background:var(--green)"></div></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin:1rem 0 0.8rem">
+                <span style="font-size:0.78rem;color:var(--gray)">L4 SHORT Accuracy (OOS)</span>
+                <span style="font-size:0.85rem;font-weight:700;color:var(--red)">72.7%</span>
+              </div>
+              <div class="progress-wrap"><div class="progress-fill" style="width:72.7%;background:var(--red)"></div></div>
+              <div style="margin-top:1.2rem;padding-top:1rem;border-top:1px solid var(--border2)">
+                <div style="font-size:0.65rem;color:var(--gray);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.6rem;font-weight:600">Signal Stats</div>
+                <div class="retrace-item"><span class="retrace-label" style="font-size:0.75rem">Avg Peak Gain (LONG)</span><span class="retrace-value" style="color:var(--green);font-size:0.8rem">+4.77% (~$92/oz)</span></div>
+                <div class="retrace-item"><span class="retrace-label" style="font-size:0.75rem">Avg Net Return (10s)</span><span class="retrace-value" style="color:var(--green);font-size:0.8rem">+2.34% (~$45/oz)</span></div>
+                <div class="retrace-item"><span class="retrace-label" style="font-size:0.75rem">Signals / Month</span><span class="retrace-value" style="color:var(--gold);font-size:0.8rem">~4.4 (quality)</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Signal History Table -->
+        <div class="table-card">
+          <div class="card-hdr">
+            <div class="card-title">🔔 Signal History</div>
+            <div class="card-badge">Last 60 OOS sessions · Forward test 2025–26</div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Date</th><th>Direction</th><th>Signal Name</th>
+                  <th>Fwd 10s Up %</th><th>Fwd Pts</th><th>Active Conditions</th>
+                </tr>
+              </thead>
+              <tbody id="historyBody">
+                <tr><td colspan="6" style="color:var(--gray);text-align:center;padding:2rem">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ NEWS PANEL ════════════════════════════════════ -->
+      <div class="panel" id="panel-news">
+        <div class="panel-hdr">
+          <div class="panel-title">📰 Gold Market News</div>
+          <div class="panel-sub">Live news feed · High-impact gold market events</div>
+        </div>
+        <div class="news-grid" id="newsFeed">
+          <div style="color:var(--gray);font-size:0.85rem;padding:2rem">Loading news…</div>
+        </div>
+      </div>
+
+      <!-- ══ ECONOMIC CALENDAR PANEL ═══════════════════════ -->
+      <div class="panel" id="panel-calendar">
+        <div class="panel-hdr">
+          <div class="panel-title">📅 Economic Calendar</div>
+          <div class="panel-sub">Key macro events impacting XAU/USD — CPI, NFP, Fed decisions, DXY</div>
+        </div>
+        <div style="border-radius:14px;overflow:hidden;border:1px solid var(--border)">
+          <!-- TradingView Economic Calendar Widget -->
+          <div class="tradingview-widget-container">
+            <div class="tradingview-widget-container__widget"></div>
+            <script type="text/javascript" src="https://s3.tradingview.com/external-embedding/embed-widget-events.js" async>
+            {
+              "colorTheme": "dark",
+              "isTransparent": true,
+              "width": "100%",
+              "height": "660",
+              "locale": "en",
+              "importanceFilter": "0,1"
+            }
+            </script>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ PERFORMANCE PANEL ══════════════════════════════ -->
+      <div class="panel" id="panel-performance">
+        <div class="panel-hdr">
+          <div class="panel-title">📈 Performance</div>
+          <div class="panel-sub">Backtest &amp; forward test metrics · OOS 2025–26</div>
+        </div>
+        <div class="perf-grid">
+          <div class="perf-card">
+            <div class="perf-ico">🎯</div>
+            <div class="perf-val" style="color:var(--green)" id="p-longAcc">—</div>
+            <div class="perf-lbl">LONG Accuracy</div>
+            <div class="perf-sub">OOS forward test</div>
+          </div>
+          <div class="perf-card">
+            <div class="perf-ico">⚡</div>
+            <div class="perf-val" style="color:var(--gold)" id="p-longMfe">—</div>
+            <div class="perf-lbl">Avg Peak Gain (LONG)</div>
+            <div class="perf-sub">Max favorable excursion</div>
+          </div>
+          <div class="perf-card">
+            <div class="perf-ico">💰</div>
+            <div class="perf-val" style="color:var(--gold)" id="p-longFinal">—</div>
+            <div class="perf-lbl">Avg Net Return (LONG)</div>
+            <div class="perf-sub">Per 10-session window</div>
+          </div>
+          <div class="perf-card">
+            <div class="perf-ico">📉</div>
+            <div class="perf-val" style="color:var(--red)" id="p-shortAcc">—</div>
+            <div class="perf-lbl">SHORT Accuracy</div>
+            <div class="perf-sub">OOS L4/L3 overext. signals</div>
+          </div>
+          <div class="perf-card">
+            <div class="perf-ico">📅</div>
+            <div class="perf-val" style="color:var(--gold)" id="p-sigMonth">—</div>
+            <div class="perf-lbl">Signals / Month</div>
+            <div class="perf-sub">High-quality setups only</div>
+          </div>
+          <div class="perf-card">
+            <div class="perf-ico">🧪</div>
+            <div class="perf-val" style="color:var(--white)">499</div>
+            <div class="perf-lbl">Combinations Tested</div>
+            <div class="perf-sub">26 survived → deployed</div>
+          </div>
+        </div>
+
+        <!-- Retracement Profiles -->
+        <div class="retrace-grid">
+          <div class="retrace-card">
+            <div class="card-hdr"><div class="card-title" style="color:var(--green)">📈 LONG Signal Profile</div></div>
+            <div class="retrace-item"><span class="retrace-label">Avg Max Gain (MFE)</span><span class="retrace-value" style="color:var(--green)">+4.77% (~$92/oz)</span></div>
+            <div class="retrace-item"><span class="retrace-label">Avg Max Retracement</span><span class="retrace-value" style="color:var(--red)">-0.67% (~$13/oz)</span></div>
+            <div class="retrace-item"><span class="retrace-label">Avg Net Return (10s)</span><span class="retrace-value" style="color:var(--green)">+2.34% (~$45/oz)</span></div>
+            <div class="retrace-item"><span class="retrace-label">% Profitable</span><span class="retrace-value" style="color:var(--green)">72.5%</span></div>
+            <div class="retrace-item"><span class="retrace-label">Retrace then win</span><span class="retrace-value" style="color:var(--gold)">19.1% — need patience</span></div>
+            <div class="retrace-item"><span class="retrace-label">Peak gain &gt;3%</span><span class="retrace-value">59.6% of signals</span></div>
+            <div class="retrace-item"><span class="retrace-label">Peak gain &gt;5%</span><span class="retrace-value">39.7% of signals</span></div>
+          </div>
+          <div class="retrace-card">
+            <div class="card-hdr"><div class="card-title" style="color:var(--red)">📉 SHORT Signal Profile</div></div>
+            <div class="retrace-item"><span class="retrace-label">Avg Max Gain (MFE)</span><span class="retrace-value" style="color:var(--red)">+3.60% (~$70/oz)</span></div>
+            <div class="retrace-item"><span class="retrace-label">Avg Max Retracement</span><span class="retrace-value" style="color:var(--green)">-1.62% (~$31/oz against)</span></div>
+            <div class="retrace-item"><span class="retrace-label">Avg Net Return (10s)</span><span class="retrace-value" style="color:var(--gold)">+0.80% (bull year)</span></div>
+            <div class="retrace-item"><span class="retrace-label">% Profitable</span><span class="retrace-value" style="color:var(--red)">46.4%</span></div>
+            <div class="retrace-item"><span class="retrace-label">Strong (L4 overext.) acc</span><span class="retrace-value" style="color:var(--green)">72.7% ✅</span></div>
+            <div class="retrace-item"><span class="retrace-label">Severe retracement &gt;3%</span><span class="retrace-value" style="color:var(--red)">42.9% — tight SL needed</span></div>
+            <div class="retrace-item"><span class="retrace-label">OOS period context</span><span class="retrace-value" style="color:var(--gold)">2025 strong bull year</span></div>
+          </div>
+        </div>
+
+        <!-- Strategy Testing Results -->
+        <div class="section-divider"><div class="line"></div><div class="text">🧪 Strategy Testing Results</div></div>
+        <div style="font-size:0.73rem;color:var(--gray);margin-bottom:0.8rem">Tested on 132 LONG signals · OOS 2025–26 · Grid vs Pyramid vs Simple hold</div>
+        <div class="retrace-card" style="margin-bottom:1rem">
+          <div class="card-hdr"><div class="card-title">📊 Grid / Martingale vs Baseline</div><div class="card-badge">Averaging down · No SL</div></div>
+          <div class="table-wrap">
+            <table style="font-size:0.78rem">
+              <thead><tr><th>Strategy</th><th>Win %</th><th>Emergency Exit</th><th>Avg PnL</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr style="background:rgba(0,230,118,0.04)"><td style="font-weight:700;color:var(--green)">⭐ Baseline (hold 10s)</td><td style="color:var(--green);font-weight:700">72.5%</td><td style="color:var(--gray)">0%</td><td style="color:var(--green);font-weight:700">+2.34%</td><td><span style="background:rgba(0,230,118,0.12);color:var(--green);padding:0.15rem 0.5rem;border-radius:4px;font-size:0.68rem;font-weight:700">✅ BEST</span></td></tr>
+                <tr><td>Grid Const Lots (0.5%, TP 0.3%)</td><td style="color:var(--green)">97.7%</td><td style="color:var(--gold)">0.8%</td><td style="color:var(--gray)">+0.12%</td><td><span style="background:rgba(255,167,38,0.1);color:var(--gold);padding:0.15rem 0.5rem;border-radius:4px;font-size:0.68rem;font-weight:700">⚠️ LOW RETURN</span></td></tr>
+                <tr><td>Mild Martingale ×1.5 (5 layers)</td><td style="color:var(--green)">98.5%</td><td style="color:var(--gold)">0.8%</td><td style="color:var(--gray)">+0.41%</td><td><span style="background:rgba(255,167,38,0.1);color:var(--gold);padding:0.15rem 0.5rem;border-radius:4px;font-size:0.68rem;font-weight:700">⚠️ LOW RETURN</span></td></tr>
+                <tr><td>Full Martingale ×2 (4 layers)</td><td style="color:var(--gold)">97.0%</td><td style="color:var(--red);font-weight:700">3.0%</td><td style="color:var(--gray)">+0.38%</td><td><span style="background:rgba(255,76,76,0.1);color:var(--red);padding:0.15rem 0.5rem;border-radius:4px;font-size:0.68rem;font-weight:700">❌ RISKY</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="retrace-card">
+          <div class="card-hdr"><div class="card-title">📐 Pyramid Up vs Baseline</div><div class="card-badge">Add on rise · Trailing stop</div></div>
+          <div class="table-wrap">
+            <table style="font-size:0.78rem">
+              <thead><tr><th>Strategy</th><th>Win %</th><th>Avg PnL</th><th>Capture Ratio</th><th>Verdict</th></tr></thead>
+              <tbody>
+                <tr style="background:rgba(0,230,118,0.04)"><td style="font-weight:700;color:var(--green)">⭐ Baseline (hold 10s)</td><td style="color:var(--green);font-weight:700">72.5%</td><td style="color:var(--green);font-weight:700">+2.34%</td><td style="color:var(--green);font-weight:700">101%</td><td><span style="background:rgba(0,230,118,0.12);color:var(--green);padding:0.15rem 0.5rem;border-radius:4px;font-size:0.68rem;font-weight:700">✅ BEST</span></td></tr>
+                <tr><td>Pyramid 0.5% + Trail 0.5%</td><td style="color:var(--gold)">55.3%</td><td style="color:var(--gray)">+0.33%</td><td style="color:var(--red)">9%</td><td><span style="background:rgba(255,76,76,0.1);color:var(--red);padding:0.15rem 0.5rem;border-radius:4px;font-size:0.68rem;font-weight:700">❌ WEAK</span></td></tr>
+                <tr><td>Pyramid 1.0% + Trail 0.5%</td><td style="color:var(--gold)">59.8%</td><td style="color:var(--gray)">+0.42%</td><td style="color:var(--red)">11%</td><td><span style="background:rgba(255,76,76,0.1);color:var(--red);padding:0.15rem 0.5rem;border-radius:4px;font-size:0.68rem;font-weight:700">❌ WEAK</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ CALCULATORS PANEL ══════════════════════════════ -->
+      <div class="panel" id="panel-tools">
+        <div class="panel-hdr">
+          <div class="panel-title">🧮 Calculators</div>
+          <div class="panel-sub">Position sizing, risk management, and R:R tools</div>
+        </div>
+        <div class="tools-grid">
+          <div class="tool-card">
+            <div class="tool-title">🧮 Position Size Calculator</div>
+            <div class="tool-field"><label>Account Size (USD)</label><input type="number" id="acctSize" value="10000"/></div>
+            <div class="tool-field"><label>Risk Per Trade (%)</label><input type="number" id="riskPct" value="1" step="0.1"/></div>
+            <div class="tool-field"><label>Stop Loss (points)</label><input type="number" id="stopLoss" value="30"/></div>
+            <div class="tool-field"><label>Point Value (USD)</label><input type="number" id="pointVal" value="1"/></div>
+            <button class="calc-btn" onclick="calcPositionSize()">Calculate Lot Size →</button>
+            <div class="result-box" id="posResult" style="display:none">
+              <div class="result-row"><span class="result-label">Risk Amount</span><span class="result-value" id="riskAmt">—</span></div>
+              <div class="result-row"><span class="result-label">Lot Size (oz)</span><span class="result-value" id="lotSize">—</span></div>
+              <div class="result-row"><span class="result-label">Max Loss</span><span class="result-value" id="maxLoss">—</span></div>
+            </div>
+          </div>
+          <div class="tool-card">
+            <div class="tool-title">⚖️ Risk:Reward Calculator</div>
+            <div class="tool-field"><label>Entry Price</label><input type="number" id="rrEntry" value="3250"/></div>
+            <div class="tool-field"><label>Stop Loss Price</label><input type="number" id="rrSL" value="3220"/></div>
+            <div class="tool-field"><label>Take Profit Price</label><input type="number" id="rrTP" value="3310"/></div>
+            <button class="calc-btn" onclick="calcRR()">Calculate R:R →</button>
+            <div class="result-box" id="rrResult" style="display:none">
+              <div class="result-row"><span class="result-label">Risk (pts)</span><span class="result-value" id="rrRisk">—</span></div>
+              <div class="result-row"><span class="result-label">Reward (pts)</span><span class="result-value" id="rrReward">—</span></div>
+              <div class="result-row"><span class="result-label">R:R Ratio</span><span class="result-value" id="rrRatio">—</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ══ SETTINGS PANEL ════════════════════════════════ -->
+      <div class="panel" id="panel-settings">
+        <div class="panel-hdr">
+          <div class="panel-title">⚙️ Settings</div>
+          <div class="panel-sub">Profile, display preferences, and signal configuration</div>
+        </div>
+        <div class="settings-grid">
+          <div class="settings-section">
+            <div class="settings-title">👤 Profile</div>
+            <div class="profile-row">
+              <div class="profile-avatar">DK</div>
+              <div>
+                <div class="profile-name">Dakshit Katakam</div>
+                <div class="profile-role">Signal Analyst · Gold.ai</div>
+                <div class="profile-email">2300031865cser@gmail.com</div>
+              </div>
+            </div>
+            <div class="settings-row"><span class="settings-key">University</span><span class="settings-val">KL University, B.Tech CS</span></div>
+            <div class="settings-row"><span class="settings-key">GitHub</span><span class="settings-val gold">github.com/DAKSHIT1</span></div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-title">🎨 Display</div>
+            <div class="settings-row"><span class="settings-key">Theme</span><span class="settings-val gold">Dark Mode</span></div>
+            <div class="settings-row"><span class="settings-key">Timezone</span><span class="settings-val">Asia/Kolkata (IST +5:30)</span></div>
+            <div class="settings-row"><span class="settings-key">Chart Default Timeframe</span><span class="settings-val">15-minute · 1 month</span></div>
+            <div class="settings-row"><span class="settings-key">Language</span><span class="settings-val">English</span></div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-title">⚡ Signal Preferences</div>
+            <div class="settings-row"><span class="settings-key">Default Hold Period</span><span class="settings-val">10 sessions (~2 weeks)</span></div>
+            <div class="settings-row"><span class="settings-key">Signal Filter</span><span class="settings-val">High confidence (OOS ≥70%)</span></div>
+            <div class="settings-row"><span class="settings-key">Asset</span><span class="settings-val gold">XAU/USD only</span></div>
+            <div class="settings-row"><span class="settings-key">Execution</span><span class="settings-val">Manual (you decide entries)</span></div>
+          </div>
+          <div class="settings-section">
+            <div class="settings-title">ℹ️ About Gold.ai</div>
+            <div class="settings-row"><span class="settings-key">Version</span><span class="settings-val">1.0 · Antigravity</span></div>
+            <div class="settings-row"><span class="settings-key">Data Range</span><span class="settings-val">Jan 2020 – Mar 2026 (1,628 sessions)</span></div>
+            <div class="settings-row"><span class="settings-key">OOS Test Period</span><span class="settings-val">Mar 2025 – Mar 2026</span></div>
+            <div class="settings-row"><span class="settings-key">Rules Deployed</span><span class="settings-val">26 of 499 tested</span></div>
+            <div class="settings-row"><span class="settings-key">Built by</span><span class="settings-val gold">Dakshit Katakam</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /panels -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- TradingView Advanced Chart -->
+<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+<script>
+// ── Panel navigation ─────────────────────────────────────
+function showPanel(id,el){
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.sb-item').forEach(i=>i.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(el) el.classList.add('active');
+}
+
+// ── Clock ─────────────────────────────────────────────────
+function updateClock(){
+  const now=new Date();
+  document.getElementById('topTime').textContent=
+    now.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:'Asia/Kolkata'})+' IST';
+}
+setInterval(updateClock,1000);updateClock();
+
+// ── TradingView Chart ─────────────────────────────────────
+var tvWidget=null;
+function loadChart(interval){
+  const el=document.getElementById('tv_chart_container');
+  if(!el)return;
+  if(tvWidget){try{tvWidget.remove();}catch(e){} tvWidget=null;}
+  el.innerHTML='';
+  tvWidget=new TradingView.widget({
+    autosize:true,
+    symbol:'OANDA:XAUUSD',
+    interval:interval||'15',
+    timezone:'Asia/Kolkata',
+    theme:'dark',
+    style:'1',
+    locale:'en',
+    toolbar_bg:'#06060e',
+    enable_publishing:false,
+    hide_side_toolbar:false,
+    allow_symbol_change:false,
+    save_image:true,
+    studies:['EMA@tv-basicstudies','VWAP@tv-basicstudies'],
+    container_id:'tv_chart_container',
+    range:'1M',
+    backgroundColor:'rgba(6,6,14,1)',
+    gridColor:'rgba(255,255,255,0.03)',
+    withdateranges:true,
+    hide_top_toolbar:false,
+  });
+}
+
+function switchTF(btn){
+  document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  loadChart(btn.dataset.interval);
+}
+
+
+// ── Level Panel — renders U1-U8 / L1-L8 in sidebar panel ─
+async function drawLevels(){
+  try{
+    const resp=await fetch('/api/levels');
+    const d=await resp.json();
+    if(!d.ok)return;
+    const fmt=v=>'$'+parseFloat(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    const list=document.getElementById('levelsList');
+    const dateEl=document.getElementById('lvlDate');
+    const stepEl=document.getElementById('lvlStep');
+    const atrEl=document.getElementById('lvlATR');
+    if(dateEl) dateEl.textContent='Session '+d.date;
+    if(stepEl) stepEl.textContent=fmt(d.step);
+    if(atrEl)  atrEl.textContent=fmt(d.atr);
+    if(document.getElementById('statOpen'))
+      document.getElementById('statOpen').textContent=fmt(d.ref_price);
+    // Build items: U8→U1, REF, L1→L8 (price high→low)
+    const items=[];
+    [...(d.upper||[])].reverse().forEach(lvl=>items.push({...lvl,side:'U'}));
+    items.push({label:'REF OPEN',price:d.ref_price,broken:true,color:'#FFD700',side:'REF'});
+    (d.lower||[]).forEach(lvl=>items.push({...lvl,side:'L'}));
+    if(!list)return;
+    list.innerHTML=items.map(it=>{
+      const isRef=it.side==='REF';
+      const isBroken=it.broken;
+      const bg=isRef?'rgba(255,215,0,0.12)':it.side==='U'&&isBroken?'rgba(0,230,118,0.1)':it.side==='L'&&isBroken?'rgba(255,76,76,0.1)':'rgba(255,255,255,0.02)';
+      const border=isRef?'rgba(255,215,0,0.4)':it.side==='U'&&isBroken?'rgba(0,230,118,0.3)':it.side==='L'&&isBroken?'rgba(255,76,76,0.3)':'rgba(255,255,255,0.05)';
+      const color=isRef?'#FFD700':it.side==='U'?(isBroken?'#00E676':'rgba(0,230,118,0.5)'):(isBroken?'#FF4C4C':'rgba(255,76,76,0.5)');
+      const dot=isRef?'#FFD700':it.side==='U'?'#00E676':'#FF4C4C';
+      const opacity=isBroken||isRef?1:0.5;
+      const fw=isBroken||isRef?'700':'400';
+      return `<div style="display:flex;align-items:center;gap:4px;padding:4px 5px;border-radius:6px;background:${bg};border:1px solid ${border};opacity:${opacity}">
+        <div style="width:6px;height:6px;border-radius:50%;background:${dot};flex-shrink:0"></div>
+        <div style="flex:1;overflow:hidden">
+          <div style="font-size:0.63rem;font-weight:${fw};color:${color};white-space:nowrap">${it.label}${isBroken&&!isRef?' ✓':''}</div>
+          <div style="font-size:0.58rem;color:rgba(255,255,255,0.45);white-space:nowrap">${fmt(it.price)}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){console.warn('drawLevels:',e);}
+}
+
+loadChart('15');
+
+// ── Live price ────────────────────────────────────────────
+async function fetchPrice(){
+  try{
+    const r=await fetch('/api/price');
+    const d=await r.json();
+    if(d.price){
+      const p=parseFloat(d.price);
+      const ch=parseFloat(d.change_pct||0);
+      const chAbs=parseFloat(d.change||0);
+      document.getElementById('topPrice').textContent='$'+p.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const chEl=document.getElementById('topChg');
+      chEl.textContent=(ch>=0?'+':'')+ch.toFixed(2)+'%';
+      chEl.className='price-chg '+(ch>=0?'up':'dn');
+      // Fill OHLC stat cards
+      const prevClose=p-chAbs;
+      const approxHigh=(p+Math.abs(chAbs)*0.3).toFixed(2);
+      const approxLow=(Math.min(p,prevClose)-Math.abs(chAbs)*0.15).toFixed(2);
+      const s=v=>'$'+parseFloat(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+      const el=id=>document.getElementById(id);
+      if(el('statOpen'))el('statOpen').textContent=s(prevClose.toFixed(2));
+      if(el('statHigh'))el('statHigh').textContent=s(approxHigh);
+      if(el('statLow'))el('statLow').textContent=s(approxLow);
+      if(el('statChange')){
+        el('statChange').textContent=(ch>=0?'+':'')+ch.toFixed(2)+'%  ('+(chAbs>=0?'+':'')+chAbs.toFixed(2)+')';
+        el('statChange').style.color=ch>=0?'var(--green)':'var(--red)';
+      }
+    }
+  }catch(e){}
+}
+fetchPrice();setInterval(fetchPrice,30000);
+
+// ── Signal engine ─────────────────────────────────────────
+function _safeFloat(v,d=0){if(v===null||v===undefined||v!==v)return d;const f=parseFloat(v);return isNaN(f)?d:f;}
+
+async function loadSignal(){
+  try{
+    const r=await fetch('/api/signal');
+    const d=await r.json();
+    if(!d.ok||!d.signal)return;
+    // API returns {ok, signal:{direction, confidence, reason, tier, signals, date, levels, key_signal}}
+    const sig=d.signal;
+    const dir=sig.direction||'NEUTRAL';
+    const confRaw=_safeFloat(sig.confidence);
+    // confidence is 0-1 or already 0-100? Check: if > 1 it's already pct
+    const conf=Math.round(confRaw>1?confRaw:confRaw*100);
+    const regime=sig.tier||'RANGING'; // tier = BULLISH/BEARISH/RANGING
+    const reason=sig.reason||'';
+    const date=d.signal.date||'';
+    const sigs=Array.isArray(sig.signals)?sig.signals:(sig.signals?[sig.signals]:[]);
+    // Map tier to display regime
+    const regimeMap={'BULLISH':'BULLISH','BEARISH':'BEARISH','RANGING':'RANGING',
+      'CONFLICTED':'RANGING','NEUTRAL':'RANGING','STRONG_LONG':'BULLISH','STRONG_SHORT':'BEARISH'};
+    const regimeDisplay=regimeMap[regime]||'RANGING';
+
+    // Hero card
+    const hero=document.getElementById('sigHero');
+    hero.className='signal-hero '+(dir==='LONG'?'long-bg':dir==='SHORT'?'short-bg':'neutral-bg');
+    const regEl=document.getElementById('regimePill');
+    regEl.className='regime-pill '+(regimeDisplay==='BULLISH'?'regime-bull':regimeDisplay==='BEARISH'?'regime-bear':'regime-range');
+    regEl.textContent=(regimeDisplay==='BULLISH'?'⬆ BULLISH MARKET':regimeDisplay==='BEARISH'?'⬇ BEARISH MARKET':'⊙ RANGING MARKET');
+    document.getElementById('sigDir').className='signal-direction '+(dir==='LONG'?'long':dir==='SHORT'?'short':'neutral');
+    document.getElementById('sigDir').textContent=dir==='LONG'?'📈 LOOK FOR LONGS':dir==='SHORT'?'📉 LOOK FOR SHORTS':'⏸ STAY COOL';
+    document.getElementById('sigReason').textContent=reason;
+    if(date) document.getElementById('lastSess').textContent='Session: '+date;
+    document.getElementById('sigChips').innerHTML=sigs.length?
+      sigs.map(s=>`<span class="sig-chip ${dir==='LONG'?'long-chip':dir==='SHORT'?'short-chip':'neutral-chip'}">${s}</span>`).join('')
+      :'<span class="sig-chip neutral-chip">No active conditions</span>';
+
+    // Confidence ring
+    const pct=Math.min(100,Math.max(0,conf));
+    const circ=2*Math.PI*36;
+    document.getElementById('confArc').style.strokeDashoffset=circ*(1-pct/100);
+    document.getElementById('confArc').style.stroke=dir==='LONG'?'var(--green)':dir==='SHORT'?'var(--red)':'var(--gold)';
+    document.getElementById('confVal').textContent=pct+'%';
+
+    // Indicators
+    if(sig.levels){renderIndicators(sig.levels);}
+  }catch(e){console.warn('Signal load error',e);}
+}
+
+function renderIndicators(levels){
+  const slope=v=>v>0.0005?{cls:'bull',emoji:'📈',lbl:'Bullish'}:v<-0.0005?{cls:'bear',emoji:'📉',lbl:'Bearish'}:{cls:'neutral',emoji:'➡️',lbl:'Flat'};
+  const ema=slope(levels.ema_slope);const vwap=slope(levels.vwap_slope);const dxy=slope(levels.dxy_slope);
+  document.getElementById('indicatorsBody').innerHTML=`
+    <div class="ind-row"><div class="ind-left"><div class="ind-ico ${ema.cls}">${ema.emoji}</div><div><div class="ind-name">EMA Slope</div><div class="ind-desc">Multi-session trend</div></div></div><div class="ind-val ${ema.cls}">${ema.lbl}</div></div>
+    <div class="ind-row"><div class="ind-left"><div class="ind-ico ${vwap.cls}">${vwap.emoji}</div><div><div class="ind-name">VWAP Slope</div><div class="ind-desc">Intraday fair value</div></div></div><div class="ind-val ${vwap.cls}">${vwap.lbl}</div></div>
+    <div class="ind-row"><div class="ind-left"><div class="ind-ico ${dxy.cls==='bull'?'bear':dxy.cls==='bear'?'bull':'neutral'}">💵</div><div><div class="ind-name">DXY (US Dollar)</div><div class="ind-desc">Rising = bearish gold</div></div></div><div class="ind-val ${dxy.cls==='bull'?'bear':dxy.cls==='bear'?'bull':'neutral'}">${dxy.lbl==='Bullish'?'🔴 Rising':'🟢 Falling'}</div></div>`;
+  const mu=Math.round(levels.max_up||0);const md=Math.round(levels.max_down||0);
+  let pills='';
+  if(mu===0&&md===0){pills='<span style="color:var(--gray);font-size:0.75rem">⚪ No levels broken — price inside range</span>';}
+  else{
+    for(let i=1;i<=Math.min(mu,8);i++){const k=i>=3?'⚡ ':'';pills+=`<span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.25rem 0.6rem;border-radius:20px;font-size:0.72rem;font-weight:700;background:rgba(0,230,118,${0.06+i*0.03});border:1px solid rgba(0,230,118,${0.2+i*0.05});color:var(--green)">${k}U${i}</span>`;}
+    for(let i=1;i<=Math.min(md,8);i++){const k=i>=3?'⚡ ':'';pills+=`<span style="display:inline-flex;align-items:center;gap:0.25rem;padding:0.25rem 0.6rem;border-radius:20px;font-size:0.72rem;font-weight:700;background:rgba(255,76,76,${0.06+i*0.03});border:1px solid rgba(255,76,76,${0.2+i*0.05});color:var(--red)">${k}L${i}</span>`;}
+    if(mu>=4)pills+=`<span style="font-size:0.68rem;color:var(--green);padding:0.25rem 0;font-weight:600">← LONG overextension zone</span>`;
+    if(md>=4)pills+=`<span style="font-size:0.68rem;color:var(--red);padding:0.25rem 0;font-weight:600">← SHORT overextension zone</span>`;
+  }
+  document.getElementById('levelsPills').innerHTML=pills;
+}
+
+// ── News feed ──────────────────────────────────────────────
+async function loadNews(){
+  try{
+    const r=await fetch('/api/news');
+    const d=await r.json();
+    const articles=d.articles||[];
+    const feed=document.getElementById('newsFeed');
+    if(!articles.length){feed.innerHTML='<div style="color:var(--gray);padding:2rem">No news available right now.</div>';return;}
+    feed.innerHTML=articles.map(a=>`
+      <div class="news-card" onclick="window.open('${a.url||'#'}','_blank')">
+        <div class="news-src">${a.source||'Gold Market'}</div>
+        <div class="news-title">${a.title||''}</div>
+        <div class="news-desc">${(a.summary||a.description||'').substring(0,140)}…</div>
+        <div class="news-time">${a.published_at||a.publishedAt||''}</div>
+      </div>`).join('');
+    document.getElementById('panel-news').querySelector('.panel-sub').textContent=
+      `${articles.length} articles · Updated just now`;
+  }catch(e){document.getElementById('newsFeed').innerHTML='<div style="color:var(--gray);padding:2rem">News service temporarily unavailable.</div>';}
+}
+
+// ── History table ──────────────────────────────────────────
+async function loadHistory(){
+  try{
+    const r=await fetch('/api/history');
+    const d=await r.json();
+    // API returns key "history", columns: date, direction, signal, fwd_10s_up(%), fwd_10s_pts, active_sigs, confidence
+    const rows=(d.history||d.rows||[]).slice(-60).reverse();
+    document.getElementById('historyBody').innerHTML=rows.length?
+      rows.map(r=>{
+        const fwdUp=_safeFloat(r.fwd_10s_up,null);
+        const fwdPts=_safeFloat(r.fwd_10s_pts,null);
+        const dir=r.direction||'NEUTRAL';
+        const conf=_safeFloat(r.confidence,0);
+        const confPct=conf>1?conf.toFixed(0):Math.round(conf*100);
+        const sigName=(r.signal||r.signal_name||'').substring(0,45);
+        const activeSigs=(r.active_sigs||r.conditions||'').toString().substring(0,50);
+        const fwdColor=fwdPts>0?'var(--green)':fwdPts<0?'var(--red)':'var(--gray)';
+        return `<tr>
+          <td style="font-size:0.75rem">${r.date||'—'}</td>
+          <td><span class="dir-badge dir-${dir}">${dir}</span></td>
+          <td style="font-size:0.74rem;color:var(--gray);max-width:180px">${sigName}</td>
+          <td style="color:${fwdColor};font-weight:600;font-size:0.8rem">${fwdUp!==null?(fwdUp>0?'WIN':'LOSS'):'—'}</td>
+          <td style="color:${fwdColor};font-weight:700">${fwdPts!==null?(fwdPts>0?'+':'')+fwdPts.toFixed(0)+' pts':'—'}</td>
+          <td style="font-size:0.7rem;color:var(--gray);max-width:200px">${activeSigs}</td>
+        </tr>`;}).join('')
+      :'<tr><td colspan="6" style="color:var(--gray);text-align:center;padding:2rem">No history data</td></tr>';
+  }catch(e){}
+}
+
+// ── Performance ────────────────────────────────────────────
+async function loadPerformance(){
+  try{
+    const r=await fetch('/api/performance');
+    const d=await r.json();
+    if(d.error)return;
+    const s=(id,v)=>{const el=document.getElementById(id);if(el&&v!==undefined)el.textContent=v;};
+    // API returns values already as percentages: long_acc=72.5, long_mfe=4.765
+    s('p-longAcc',(_safeFloat(d.long_acc)).toFixed(1)+'%');
+    s('p-longMfe','+'+(_safeFloat(d.long_mfe)).toFixed(2)+'%');
+    s('p-longFinal','+'+(_safeFloat(d.long_avg_gain)).toFixed(2)+'%');
+    s('p-shortAcc',(_safeFloat(d.short_acc)).toFixed(1)+'%');
+    s('p-sigMonth',_safeFloat(d.signals_month,4.4).toFixed(1)+'/mo');
+  }catch(e){}
+}
+
+// ── Calculators ────────────────────────────────────────────
+function calcPositionSize(){
+  const acc=parseFloat(document.getElementById('acctSize').value)||10000;
+  const risk=parseFloat(document.getElementById('riskPct').value)||1;
+  const sl=parseFloat(document.getElementById('stopLoss').value)||30;
+  const pv=parseFloat(document.getElementById('pointVal').value)||1;
+  const riskAmt=acc*(risk/100);
+  const lotSize=riskAmt/(sl*pv);
+  document.getElementById('riskAmt').textContent='$'+riskAmt.toFixed(2);
+  document.getElementById('lotSize').textContent=lotSize.toFixed(3)+' oz';
+  document.getElementById('maxLoss').textContent='$'+(lotSize*sl*pv).toFixed(2);
+  document.getElementById('posResult').style.display='block';
+}
+function calcRR(){
+  const entry=parseFloat(document.getElementById('rrEntry').value)||3250;
+  const sl=parseFloat(document.getElementById('rrSL').value)||3220;
+  const tp=parseFloat(document.getElementById('rrTP').value)||3310;
+  const risk=Math.abs(entry-sl);const reward=Math.abs(tp-entry);
+  document.getElementById('rrRisk').textContent=risk.toFixed(1)+' pts';
+  document.getElementById('rrReward').textContent=reward.toFixed(1)+' pts';
+  document.getElementById('rrRatio').textContent='1 : '+(reward/risk).toFixed(2);
+  document.getElementById('rrResult').style.display='block';
+}
+
+// ── Init ───────────────────────────────────────────────────
+loadSignal();
+loadNews();
+loadHistory();
+loadPerformance();
+drawLevels();
+setInterval(loadSignal,120000);
+setInterval(loadNews,300000);
+</script>
+</body>
+</html>
