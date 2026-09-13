@@ -1,0 +1,56 @@
+name: Gold AI Telegram Alerts
+
+on:
+  schedule:
+    # Gold market trading days (Monday - Friday)
+    # Times in UTC (IST is UTC + 5:30)
+    # 08:00 AM IST = 02:30 UTC (London Open Alert)
+    - cron: '30 2 * * 1-5'
+    # 02:00 PM IST = 08:30 UTC (New York Open Alert)
+    - cron: '30 8 * * 1-5'
+    # 11:30 PM IST = 18:00 UTC (End of Day Report)
+    - cron: '0 18 * * 1-5'
+
+  workflow_dispatch:
+    inputs:
+      session:
+        description: 'Session alert to send'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - london
+          - ny
+          - eod
+          - test
+
+jobs:
+  send-telegram-alert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          pip install requests pandas numpy
+
+      - name: Run Gold AI Telegram Notifier
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Running manual dispatch with --${{ inputs.session }}"
+            python signal_notifier.py --${{ inputs.session }}
+          else
+            echo "Running scheduled cron with --auto"
+            python signal_notifier.py --auto
+          fi
