@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 
 from refresh_data import build_sessions_from, SESSION_FILE, DATA_15M_FILE
-from session_builder import add_rolling_features
+from session_builder import add_rolling_features, MIN_SESSION_BARS
 import signal_rules
 
 EXACT = ["max_up", "max_down", "is_bidir", "l1_false_brk", "broke_u1", "broke_l1"]
@@ -35,7 +35,7 @@ def main(n=30):
     start_idx = max(0, end_idx - n)
     from_date = stored["date"].iloc[start_idx]
     live = build_sessions_from(bars, from_date)
-    live = live[live["complete"]].set_index("date")
+    live = live[live["complete"] & (live["nbars"] >= MIN_SESSION_BARS)].set_index("date")
 
     fails = 0
     rows = []
@@ -59,7 +59,7 @@ def main(n=30):
     hist = stored.iloc[:start_idx].copy()
     live_rows = live.reset_index()
     live_rows = live_rows[live_rows["date"] < stored["date"].iloc[end_idx]]
-    combo = pd.concat([hist, live_rows.drop(columns=["complete"])], ignore_index=True, sort=False)
+    combo = pd.concat([hist, live_rows.drop(columns=["complete", "nbars"])], ignore_index=True, sort=False)
     combo = add_rolling_features(combo, start_idx=len(hist))
     st_recs = stored.to_dict("records")
     lv_recs = combo.to_dict("records")

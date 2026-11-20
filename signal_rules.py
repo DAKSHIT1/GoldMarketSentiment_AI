@@ -13,11 +13,13 @@ ACTIVE STRATEGY (forward paper trading, since 2026-11-20)
     at session K's open the EMA200 slope is falling (< -EMA_EPS) AND the dollar
     (UUP EMA slope) is falling (< 0). Evaluated once session K has CLOSED;
     paper entry = session K close, exit = close of session K + HOLD_SESSIONS.
-    Validation (lookahead-free walk-forward, 10-session hold, 0.02% cost,
-    weekend pseudo-sessions removed — see session_builder.tradable_bars):
-      OOS 2024-07 → 2026-11: 32 trades, 62.5% win vs 60.5% base, +1.83%/trade
-      Full 2020–2026:        87 trades, 59% win, +1.20%/trade, PF 2.63,
-                             max DD -12.8%, Sharpe 1.21 (beats 99% of random entries)
+    Validation (lookahead-free walk-forward, 10-session hold, 0.02% cost; session
+    schema 2 = tradable bars, trading-day session split, holiday stubs dropped):
+      Discovery 2020 → 2024-06: 56 trades, 58.9% win vs 54.0% base, +0.98% vs +0.41% base
+      OOS 2024-07 → 2026-11:    32 trades, 59.4% win vs 60.5% base, +1.80% vs +0.90% base
+                                (edge is in move size, not hit rate)
+      Full 2020–2026:           88 trades, 59% win, +1.27%/trade, PF 2.75,
+                                max DD -12.8%, Sharpe 1.30 (beats 100% of 300 random-entry draws)
 
 ARCHIVED: every older level / sequence / stay-out rule is kept in RULES for
 reporting (forward_test_signal.py) but is DISABLED — it never affects a live
@@ -80,7 +82,7 @@ RULES = [
     # ── ACTIVE: macro pullback (the only enabled rule) ────────────────────
     dict(key=ACTIVE_RULE_KEY, name="Macro Pullback — EMA Falling + Dollar Falling",
          dir="LONG", tier="STRONG", hold=HOLD_SESSIONS,
-         is_acc=56.4, oos=62.5, oos_n=32,          # 10-session hold; discovery <2024-07, OOS 2024-07→2026-11
+         is_acc=58.9, oos=59.4, oos_n=32,          # 10-session hold; discovery <2024-07, OOS 2024-07→2026-11
          desc="EMA200 slope falling and dollar (UUP) falling at session open — gold pullback in a weak-dollar regime",
          cond=lambda c, p1, p2: _es(c) < -EMA_EPS and _ds(c) < 0),
 

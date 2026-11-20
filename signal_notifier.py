@@ -55,6 +55,10 @@ SIGNAL_TITLE     = "LONG (Macro Pullback — EMA Falling + Dollar Falling)"
 # Latest completed session must have ended within this many hours, otherwise the
 # data feed is considered stale (covers the weekend gap and short holidays).
 STALE_AFTER_HOURS = 80
+# UUP (dollar proxy) close used by the latest session must be at most this many calendar
+# days before that session's trading day (normal: 1 day, 3 over a weekend, 4 with a holiday).
+MACRO_STALE_DAYS = 5
+UUP_FILE = os.path.join(ROOT, "data", "uup_1d.csv")
 
 
 def _secret(name):
@@ -96,9 +100,11 @@ def save_state(state):
     if len(state["sent"]) > MAX_STATE_KEYS:
         keep = sorted(state["sent"].items(), key=lambda kv: kv[1]["sent_at"])[-MAX_STATE_KEYS:]
         state["sent"] = dict(keep)
-    with open(STATE_FILE, "w") as f:
+    tmp = STATE_FILE + ".tmp"          # atomic: never leave a half-written state file
+    with open(tmp, "w") as f:
         json.dump(state, f, indent=2, sort_keys=True)
         f.write("\n")
+    os.replace(tmp, STATE_FILE)
 
 
 def mark_sent(state, key, **info):
@@ -158,10 +164,9 @@ def fmt_day(ts):
 
 
 def est_exit_day(sess, i, sessions_left):
-    """Estimate the trading day of the exit session from recent session spacing."""
-    recent = sess["date"].iloc[max(0, i - 30):i + 1].diff().dropna()
-    step = recent.median() if len(recent) else pd.Timedelta(days=1)
-    return fmt_day(sess["date"].iloc[i] + step * sessions_left)
+    """Trading day of the exit session: one session per weekday (holidays not modelled)."""
+    d = np.busday_offset(np.datetime64(trade_day(sess["date"].iloc[i])), int(sessions_left), roll="forward")
+    return f"{pd.Timestamp(d):%a %d %b %Y}"
 
 
 def get_live_gold_price():
@@ -203,9 +208,9 @@ def open_trade_txt(trade, sess, i):
             f"  Exit: close of session {HOLD} (≈ {est_exit_day(sess, i, HOLD - done)})")
 
 
-BACKTEST_TXT = ("2020–26 backtest (10-session, no stop, 0.02% cost): 87 trades, 59% win, "
-                "+1.20%/trade, PF 2.63, max DD −12.8%. Out-of-sample Jul-24→Nov-26: "
-                "32 trades, 62.5% win vs 60.5% base.")
+BACKTEST_TXT = ("2020–26 backtest (10-session, no stop, 0.02% cost): 88 trades, 59% win, "
+                "+1.27%/trade, PF 2.75, max DD −12.8%. Out-of-sample Jul-24→Nov-26: "
+                "32 trades, +1.80%/trade vs +0.90% for any 10-session hold.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -275,6 +280,27 @@ def msg_armed(sess, state):
             + msg_status(sess, state).split("\n\n", 1)[1])
 
 
+def build_alert_msg(title, body):
+    return f"⚠️ <b>GOLD AI — {title}</b>\n\n{body}\n\n<i>Check the GitHub Actions log.</i>"
+
+
+def uup_last_date():
+    try:
+        return pd.read_csv(UUP_FILE, parse_dates=["datetime"])["datetime"].max()
+    except Exception:
+        return None
+
+
+def send_alert_once(state, key, msg, dry_run):
+    """Pipeline-health alert, sent at most once per key."""
+    if key in state["sent"]:
+        log(f"alert already sent ({key})")
+        return
+    if send_telegram(msg, dry_run) and not dry_run:
+        mark_sent(state, key)
+        save_state(state)
+
+
 def build_stale_msg(last_date, age_h):
     return (f"⚠️ <b>GOLD AI — DATA FEED STALE</b>\n\n"
             f"Latest completed session: {fmt_day(last_date)}\n"
@@ -322,13 +348,30 @@ def run(refresh=True, dry_run=False, status=False, test=False):
     last  = sess["date"].iloc[-1]
     state = load_state()
 
-    ended = last + pd.Timedelta(hours=23)                       # 17:00 NY next day
+    # 17:00 NY on the trading day (measured from the 18:00 open even if the first bar was late)
+    ended = (last - pd.Timedelta(hours=18)).normalize() + pd.Timedelta(hours=41)
     age_h = (pd.Timestamp.now(tz="America/New_York").tz_localize(None) - ended).total_seconds() / 3600
     log(f"latest completed session {last} (ended {age_h:.1f}h ago); "
         f"last processed {state['last_processed']}; open trade: {bool(state['paper_trade'])}")
 
     if status or test:
         return 0 if send_telegram(msg_status(sess, state, test=test), dry_run) else 1
+
+    # Pipeline health (outcomes passed in by the workflow)
+    refresh_out = os.environ.get("REFRESH_OUTCOME", "")
+    parity_out = os.environ.get("PARITY_OUTCOME", "")
+    today = f"{datetime.now(timezone.utc):%Y-%m-%d}"
+    if refresh_out == "failure":
+        send_alert_once(state, f"refresh_fail:{today}", build_alert_msg(
+            "DATA REFRESH FAILED",
+            "TwelveData / Yahoo refresh failed this run. Stored data is used; new sessions are "
+            "processed once the refresh recovers."), dry_run)
+    if parity_out == "failure":
+        send_alert_once(state, f"parity_fail:{skey(last)}", build_alert_msg(
+            "PARITY CHECK FAILED",
+            f"Live session rebuild disagrees with stored sessions (latest {fmt_day(last)}). "
+            "Paper trading is paused until verify_parity.py passes."), dry_run)
+        return 1
 
     if age_h > STALE_AFTER_HOURS:
         key = f"stale:{skey(last)}"
@@ -338,6 +381,16 @@ def run(refresh=True, dry_run=False, status=False, test=False):
         if send_telegram(build_stale_msg(last, age_h), dry_run) and not dry_run:
             mark_sent(state, key)
             save_state(state)
+        return 1
+
+    # Dollar data must be current: dxy_slope of the latest session comes from UUP
+    uup = uup_last_date()
+    lag = (pd.Timestamp(trade_day(last)) - uup).days if uup is not None else 999
+    if lag > MACRO_STALE_DAYS:
+        send_alert_once(state, f"macro_stale:{skey(last)}", build_alert_msg(
+            "DOLLAR (UUP) DATA STALE",
+            f"Latest UUP close {uup.date() if uup is not None else 'missing'} is {lag} days before "
+            f"session {fmt_day(last)}. Paper trading is paused until the macro feed updates."), dry_run)
         return 1
 
     # Which sessions are new?

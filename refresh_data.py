@@ -19,9 +19,13 @@ Run:  python refresh_data.py            (all steps)
                                         (repair stored sessions from a date)
 
 Non-tradable bars (weekend OTC quotes, 17:00 break) are dropped on write and
-before building sessions — see session_builder.tradable_bars.
+before building sessions — see session_builder.tradable_bars. Sessions are split
+by trading day and holiday stubs (< MIN_SESSION_BARS bars) are dropped. When the
+session schema changes (SESSION_SCHEMA vs data/session_regime_v2.meta.json) the
+whole table is rebuilt automatically on the next run.
 """
 
+import json
 import os
 import sys
 import time
@@ -39,14 +43,20 @@ from feature_engine import generate_features                    # noqa: E402
 from session_builder import (tag_sessions, build_session_db_v2,  # noqa: E402
                              add_rolling_features, classify_v2,
                              session_is_complete, tradable_bars,
-                             fill_forward_cols)
+                             fill_forward_cols, session_start_flags,
+                             trading_day, MIN_SESSION_BARS)
 
 SESSION_FILE   = "data/session_regime_v2.csv"
+SESSION_META   = "data/session_regime_v2.meta.json"
+# Bump when session construction changes; a stored table built by an older schema is
+# rebuilt from scratch on the next run (self-healing, no manual data migration).
+#   1: original (18:00-bar session split)
+#   2: tradable bars only, trading-day session split, sessions < MIN_SESSION_BARS dropped
+SESSION_SCHEMA = 2
 NY_TZ          = "America/New_York"
 WARMUP_SESSIONS = 45          # sessions of history fed to generate_features before the first rebuilt one
 CHUNK_DAYS     = 40           # 40 days of 15m bars < TwelveData's 5000-row limit
 TD_SLEEP_SEC   = 8            # free tier: 8 requests / minute
-FEED_CHANGE_REPAIR_FROM = "2025-01-01"   # feed began adding weekend / 17:00 bars in 2025
 
 
 def log(msg):
@@ -124,7 +134,9 @@ def update_gold_bars():
     n_raw = len(merged)
     merged = tradable_bars(merged)   # drop weekend OTC quotes + 17:00 break bars
     added = len(merged) - len(bars)
-    merged.to_csv(DATA_15M_FILE, index=False)
+    tmp = DATA_15M_FILE + ".tmp"
+    merged.to_csv(tmp, index=False)
+    os.replace(tmp, DATA_15M_FILE)
     log(f"gold bars: {added:+d} net, {n_raw - len(merged)} non-tradable dropped "
         f"(now end at {merged['datetime'].max()})")
     return added
@@ -135,8 +147,10 @@ def update_gold_bars():
 # ─────────────────────────────────────────────────────────────────────────────
 def update_macro():
     from fetch_macro import download_macro_yahoo
-    download_macro_yahoo("UUP", "data/uup_1d.csv")
+    ok = download_macro_yahoo("UUP", "data/uup_1d.csv")
     download_macro_yahoo("IEF", "data/ief_1d.csv")
+    if not ok:   # UUP drives dxy_slope (half of the active rule) — fail the refresh step
+        raise RuntimeError("UUP macro refresh failed (stored file kept)")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -149,7 +163,7 @@ def build_sessions_from(bars, from_date, warmup_sessions=WARMUP_SESSIONS):
     Returns DataFrame with a 'complete' flag.
     """
     bars = tradable_bars(bars.sort_values("datetime").reset_index(drop=True))
-    starts = bars.index[(bars["datetime"].dt.hour == 18) & (bars["datetime"].dt.minute == 0)]
+    starts = bars.index[session_start_flags(bars["datetime"])]
     start_times = bars.loc[starts, "datetime"]
     target = start_times[start_times >= from_date]
     if target.empty:
@@ -165,12 +179,30 @@ def build_sessions_from(bars, from_date, warmup_sessions=WARMUP_SESSIONS):
     sess = sess[sess["date"] >= from_date].reset_index(drop=True)
 
     last_bar = feats.groupby("session_id")["datetime"].max()
+    nbars = feats.groupby("session_id").size()
     max_sid = feats["session_id"].max()
     sess["complete"] = [
         session_is_complete(d, last_bar[s], s < max_sid)
         for s, d in zip(sess["sid"], sess["date"])
     ]
+    sess["nbars"] = [int(nbars[s]) for s in sess["sid"]]
     return sess
+
+
+def _read_meta():
+    try:
+        with open(SESSION_META) as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
+
+def _write_meta():
+    tmp = SESSION_META + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump({"schema": SESSION_SCHEMA}, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, SESSION_META)
 
 
 def rebuild_sessions(rebuild_from=None):
@@ -185,16 +217,14 @@ def rebuild_sessions(rebuild_from=None):
 
     # Always rebuild the last stored session: it may have been written while incomplete.
     from_date = stored["date"].iloc[-1]
-    # Self-heal: weekend pseudo-sessions (Fri/Sat 18:00 starts) mean history was built
-    # from non-tradable bars — rebuild from the first one.
-    # The feed's 17:00-break bars started before the first weekend row, so repair from
-    # FEED_CHANGE_REPAIR_FROM (2024 and earlier are clean).
-    wk = stored.loc[stored["date"].dt.day_of_week.isin([4, 5]), "date"]
-    if len(wk):
-        start = min(wk.iloc[0], pd.Timestamp(FEED_CHANGE_REPAIR_FROM))
-        if rebuild_from is None or start < pd.Timestamp(rebuild_from):
-            log(f"found {len(wk)} weekend pseudo-session(s); repairing from {start}")
-            rebuild_from = start
+    # Self-heal: a table from an older schema (or one containing weekend pseudo-sessions)
+    # is rebuilt from the first stored session with the current code.
+    schema = int(_read_meta().get("schema", 1))
+    n_weekend = int(trading_day(stored["date"]).dt.day_of_week.isin([4, 5]).sum())
+    if schema < SESSION_SCHEMA or n_weekend:
+        log(f"session table schema {schema} (current {SESSION_SCHEMA}), {n_weekend} weekend rows "
+            f"→ full rebuild")
+        rebuild_from = stored["date"].iloc[0]
     if rebuild_from is not None:
         later = stored.loc[stored["date"] >= pd.Timestamp(rebuild_from), "date"]
         if len(later):
@@ -207,7 +237,11 @@ def rebuild_sessions(rebuild_from=None):
     incomplete = fresh[~fresh["complete"]]
     if len(incomplete):
         log(f"skipping in-progress session(s): {[str(d) for d in incomplete['date']]}")
-    fresh = fresh[fresh["complete"]].drop(columns=["complete"]).reset_index(drop=True)
+    thin = fresh[fresh["complete"] & (fresh["nbars"] < MIN_SESSION_BARS)]
+    if len(thin):
+        log(f"dropping thin session(s) (<{MIN_SESSION_BARS} bars): {[str(d) for d in thin['date']]}")
+    fresh = (fresh[fresh["complete"] & (fresh["nbars"] >= MIN_SESSION_BARS)]
+             .drop(columns=["complete", "nbars"]).reset_index(drop=True))
 
     keep = stored[stored["date"] < from_date].reset_index(drop=True)
     base_sid = int(stored.loc[stored["date"] == from_date, "sid"].iloc[0])
@@ -224,7 +258,10 @@ def rebuild_sessions(rebuild_from=None):
     combined = fill_forward_cols(combined)
     combined = combined[stored.columns]
     combined["date"] = combined["date"].dt.strftime("%Y-%m-%d %H:%M:%S")
-    combined.to_csv(SESSION_FILE, index=False)
+    tmp = SESSION_FILE + ".tmp"
+    combined.to_csv(tmp, index=False)
+    os.replace(tmp, SESSION_FILE)
+    _write_meta()
     replaced = int((stored["date"] >= from_date).sum())
     log(f"sessions: {len(fresh)} written ({replaced} stored rows replaced); "
         f"latest complete = {combined['date'].iloc[-1]}")

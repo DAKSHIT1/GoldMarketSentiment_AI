@@ -2,6 +2,17 @@ import pandas as pd
 import numpy as np
 from config import *
 from level_engine import MathLevelEngine
+from session_builder import session_start_flags
+
+
+def _new_session(df):
+    """First bar of each trading-day session (handles sessions that open after 18:00)."""
+    if "datetime" in df.columns:
+        return session_start_flags(df["datetime"])
+    f = np.zeros(len(df), dtype=bool)
+    if len(f):
+        f[0] = True
+    return f
 
 # ──────────────────────────────────────────────────────────────
 #  VWAP HELPERS
@@ -14,16 +25,15 @@ def _compute_session_vwap(df: pd.DataFrame) -> np.ndarray:
     Resets every day at 18:00 EST (NY session open).
     """
     typical = ((df["high"] + df["low"] + df["close"]) / 3).values
-    hours    = df["datetime"].dt.hour.values if "datetime" in df.columns else np.zeros(len(df))
-    minutes  = df["datetime"].dt.minute.values if "datetime" in df.columns else np.zeros(len(df))
+    new_sess = _new_session(df)
 
     vwap_arr    = np.full(len(df), np.nan)
     cum_tp      = 0.0
     count       = 0
 
     for i in range(len(df)):
-        # Reset at 18:00 (NY session open)
-        if hours[i] == 18 and minutes[i] == 0:
+        # Reset at the session open (first bar of the trading day)
+        if new_sess[i]:
             cum_tp = 0.0
             count  = 0
         cum_tp += typical[i]
@@ -187,8 +197,7 @@ def _level_sequence_features(df: pd.DataFrame, engine: MathLevelEngine) -> pd.Da
     lows    = df["low"].values
     opens_  = df["open"].values
     atrs    = df["atr"].values.clip(1e-6)
-    hours   = df["datetime"].dt.hour.values if "datetime" in df.columns else np.zeros(n)
-    minutes = df["datetime"].dt.minute.values if "datetime" in df.columns else np.zeros(n)
+    new_sess = _new_session(df)
 
     # Output arrays
     broken_up       = np.zeros(n)
@@ -218,8 +227,7 @@ def _level_sequence_features(df: pd.DataFrame, engine: MathLevelEngine) -> pd.Da
 
     for i in range(n):
         # ── Session reset ──────────────────────────────────────────────────
-        is_new_session = (engine.period_open is None or
-                          (hours[i] == 18 and minutes[i] == 0))
+        is_new_session = engine.period_open is None or new_sess[i]
         if is_new_session:
             engine.reset_levels(opens_[i])
             sess_open       = opens_[i]
@@ -365,11 +373,10 @@ def _level_stack_features(df: pd.DataFrame, engine: MathLevelEngine) -> pd.DataF
     room_up    = np.zeros(n)
     room_down  = np.zeros(n)
 
-    hours   = df["datetime"].dt.hour.values if "datetime" in df.columns else np.zeros(n)
-    minutes = df["datetime"].dt.minute.values if "datetime" in df.columns else np.zeros(n)
+    new_sess = _new_session(df)
 
     for i in range(n):
-        if hours[i] == 18 and minutes[i] == 0:
+        if new_sess[i]:
             engine.reset_levels(df["open"].values[i])
 
         all_levels = engine.get_all_levels()
@@ -453,19 +460,14 @@ def generate_features(df15, is_live=False):
     level_position = []
     level_ranks    = []
 
-    if "datetime" in df15.columns:
-        hours   = df15["datetime"].dt.hour.values
-        minutes = df15["datetime"].dt.minute.values
-    else:
-        hours   = np.zeros(len(df15))
-        minutes = np.zeros(len(df15))
+    new_sess = _new_session(df15)
 
     opens  = df15["open"].values
     closes = df15["close"].values
 
     for i in range(len(df15)):
-        # Session reset triggers at 18:00
-        if engine.period_open is None or (hours[i] == 18 and minutes[i] == 0):
+        # Session reset at the first bar of each trading day
+        if engine.period_open is None or new_sess[i]:
             engine.reset_levels(opens[i])
 
         res = engine.find_nearest_context(closes[i])

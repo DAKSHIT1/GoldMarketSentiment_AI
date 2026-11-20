@@ -1,28 +1,25 @@
 # Gold.ai: Algorithmic Market Sentiment & Trading Engine
 
-An advanced, quantitative trading system designed specifically for the Gold (XAU/USD) market. This system uses structural price levels, session volatility regimes, and machine learning models to identify high-probability intraday trading opportunities.
+An advanced, quantitative trading system designed specifically for the Gold (XAU/USD) market. It computes structural price levels and session regimes from 15-minute data and forward paper-trades a single validated macro rule, with Telegram alerts.
 
 ## 🚀 Key Features
 
 *   **Algorithmic Level Generation**: Automatically calculates daily structural levels (U1-U8, L1-L8) based on Average True Range (ATR) and session open prices.
 *   **Intraday Regime Classification**: Analyzes price action across London and New York sessions to categorize the market into distinct "regimes" (e.g., trend, range, exhaustion).
-*   **Machine Learning Signal Engine**: Uses CatBoost to predict market direction and trade viability based on level interactions, VWAP, and macro factors (DXY, Yields).
-*   **Rules-Based Forward Test**: Employs a battle-tested rule engine focusing on overextension reversals (e.g., "U4 Overextension", "L4 Overextension") that achieved a 72.5% win rate in out-of-sample forward testing.
+*   **Macro Pullback Rule (live, paper trading)**: LONG when the EMA200 slope and the dollar (UUP) are both falling at the session open; held 10 sessions, no stop (`signal_rules.py`, `signal_notifier.py`).
+*   **Rules-Based Forward Test**: `forward_test_signal.py` reports the older level / sequence rules, which are archived (disabled) after lookahead-free re-validation showed no edge.
 *   **Live Interactive Dashboard**: A Flask-based web application with real-time TradingView charts overlaid with dynamic algorithmic levels, live signal feeds, and historical performance tracking.
 
 ## 📊 Strategy Highlights
 
-The core edge of this system relies on **Overextension Reversals**. When the gold price stretches too far from its underlying moving averages and structural baselines within a single session, the system anticipates a snapback.
-
-*   **LONG Edge**: Highly accurate in identifying bullish reversals after false breakdowns (72.5% OOS accuracy).
-*   **STAY COOL Filter**: Intelligently identifies choppy, bidirectional markets and advises staying out of the market.
+The only active rule is the **Macro Pullback** LONG (EMA falling + dollar falling), entered at the signal session's close and held 10 sessions. Lookahead-free validation, 0.02% cost: 2020–2026 about 87 trades, 59% win, +1.20% per trade; see `signal_rules.py` for the current figures. It is paper traded only.
 
 ## 🛠️ Tech Stack
 
 *   **Backend**: Python, Flask, Pandas, NumPy
-*   **Machine Learning**: CatBoost, scikit-learn
 *   **Frontend**: HTML/CSS/JS, Lightweight Charts, TradingView Widget
-*   **Data APIs**: Yahoo Finance (Market Data)
+*   **Data APIs**: TwelveData (XAU/USD 15m), Yahoo Finance (UUP / IEF daily)
+*   **Automation**: GitHub Actions (`.github/workflows/telegram_alerts.yml`) + Telegram
 
 ## 💻 Installation & Usage
 
@@ -47,9 +44,9 @@ The core edge of this system relies on **Overextension Reversals**. When the gol
 
 *   `/dashboard`: Flask application, HTML templates, and API endpoints.
 *   `/data`: Historical OHLCV datasets and processed features.
-*   `/models`: Pre-trained CatBoost machine learning models.
 *   `forward_test_signal.py`: Core rule-based strategy execution and validation.
-*   `backtest_final.py`: ML-based backtesting pipeline.
+*   `signal_rules.py` / `signal_notifier.py`: shared rule definitions and the Telegram paper trader.
+*   `refresh_data.py` / `session_builder.py` / `verify_parity.py`: live data refresh, session construction, parity check.
 *   `feature_engine.py`: Complex feature generation from raw price data.
 
 ---
