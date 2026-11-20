@@ -71,6 +71,7 @@ print("Loading bar data for price measurement...")
 bars = pd.read_csv("data/regime_features.csv")
 bars["datetime"] = pd.to_datetime(bars["datetime"])
 bars = bars.sort_values("datetime").fillna(0).reset_index(drop=True)
+bars = tradable_bars(bars)  # drop weekend OTC quotes / 17:00 break bars (see session_builder)
 
 sess_prices = bars.groupby("session_id").agg(
     sess_open  = ("open",  "first"),
