@@ -64,7 +64,8 @@ print(f"Bars: {len(df):,}  |  {df['datetime'].iloc[0].date()} → {df['datetime'
 #  STEP A: TAG SESSIONS
 # ─────────────────────────────────────────────────────────────────────────────
 print("\nTagging sessions (reset at 18:00 EST)...")
-df["_session_start"] = (df["datetime"].dt.hour == 18) & (df["datetime"].dt.minute == 0)
+from session_builder import session_start_flags  # split by trading day, not by an 18:00 bar
+df["_session_start"] = session_start_flags(df["datetime"])
 df["session_id"]     = df["_session_start"].cumsum()
 n_sessions           = df["session_id"].nunique()
 print(f"Total sessions: {n_sessions:,}")

@@ -33,6 +33,11 @@ RETEST_CONT_BONUS = True
 
 ROLL = 10
 
+# Sessions with fewer bars than this (holiday stubs, e.g. a 1-bar Good Friday) are not
+# real trading sessions: they are excluded from the session table (and so never count
+# toward a hold or fire a signal). Same threshold as the strategy stress test.
+MIN_SESSION_BARS = 48
+
 ROLL_COLS = ["roll_p_u2_u1", "roll_p_l2_l1", "roll_p_l3_l1",
              "roll_avg_max_up", "roll_avg_max_down",
              "roll_flip_rate", "roll_no_break_pct",
@@ -56,11 +61,28 @@ def tradable_bars(bars):
     return bars[keep.to_numpy()].reset_index(drop=True)
 
 
+def trading_day(dt):
+    """Trading day of each timestamp: a session starting 18:00 NY on day D belongs to key D."""
+    return (pd.to_datetime(dt) - pd.Timedelta(hours=18)).dt.normalize()
+
+
+def session_start_flags(dt):
+    """
+    True on the first bar of every session. Sessions are split by trading day, NOT by the
+    presence of an 18:00 bar: the feed sometimes starts a session at 19:00 (six Sundays in
+    May–Jul 2024), which previously merged that session into the prior one.
+    """
+    key = trading_day(pd.Series(np.asarray(dt)))
+    flags = (key != key.shift(1)).to_numpy().copy()
+    if len(flags):
+        flags[0] = True
+    return flags
+
+
 def tag_sessions(bars, start_id=0):
-    """Session id increments at every 18:00 New York bar (same as regime_features.py)."""
-    start = (bars["datetime"].dt.hour == 18) & (bars["datetime"].dt.minute == 0)
+    """Session id increments at the first bar of every trading day (see session_start_flags)."""
     bars = bars.copy()
-    bars["session_id"] = start.cumsum() + start_id
+    bars["session_id"] = np.cumsum(session_start_flags(bars["datetime"])) - 1 + start_id
     return bars
 
 
@@ -221,4 +243,6 @@ def session_is_complete(sess_start, last_bar_in_session, next_session_exists):
     """
     if next_session_exists:
         return True
-    return last_bar_in_session >= sess_start + pd.Timedelta(hours=22, minutes=45)
+    # measure from the trading day's 18:00 open even if the first bar came later
+    day_open = (pd.Timestamp(sess_start) - pd.Timedelta(hours=18)).normalize() + pd.Timedelta(hours=18)
+    return last_bar_in_session >= day_open + pd.Timedelta(hours=22, minutes=45)

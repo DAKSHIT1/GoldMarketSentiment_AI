@@ -58,9 +58,14 @@ jobs:
         run: python refresh_data.py
 
       - name: Verify live/batch session parity
+        id: parity
+        continue-on-error: true   # the notifier alerts on Telegram and pauses paper trading
         run: python verify_parity.py 30
 
       - name: Run Gold AI Telegram Notifier
+        env:
+          REFRESH_OUTCOME: ${{ steps.refresh.outcome }}
+          PARITY_OUTCOME: ${{ steps.parity.outcome }}
         run: |
           MODE="${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'auto' }}"
           echo "Mode: $MODE"
@@ -77,11 +82,29 @@ jobs:
           git config user.name  "gold-ai-bot"
           git config user.email "gold-ai-bot@users.noreply.github.com"
           git add data/gold_15m_full.csv data/uup_1d.csv data/ief_1d.csv data/session_regime_v2.csv
-          if [ -f state/notifier_state.json ]; then git add state/notifier_state.json; fi
+          for f in data/session_regime_v2.meta.json state/notifier_state.json; do
+            if [ -f "$f" ]; then git add "$f"; fi
+          done
           if git diff --cached --quiet; then
             echo "Nothing to commit"
-          else
-            git commit -m "chore: refresh session data and notifier state [skip ci]"
-            git pull --rebase --autostash
-            git push
+            exit 0
           fi
+          git commit -m "chore: refresh session data and notifier state [skip ci]"
+          # Telegram messages were already sent: the state MUST reach main or the next run
+          # would resend them. On a rebase conflict keep the bot's data/state (-X theirs =
+          # the commit being replayed) and retry.
+          for attempt in 1 2 3 4 5; do
+            if git pull --rebase -X theirs --autostash && git push; then
+              echo "pushed (attempt $attempt)"; exit 0
+            fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 10))
+          done
+          echo "::error::could not push data/state after 5 attempts — next run may resend alerts"
+          exit 1
+
+      - name: Fail the run if refresh or parity failed
+        if: steps.refresh.outcome == 'failure' || steps.parity.outcome == 'failure'
+        run: |
+          echo "::error::refresh=${{ steps.refresh.outcome }} parity=${{ steps.parity.outcome }}"
+          exit 1

@@ -72,6 +72,7 @@ bars = pd.read_csv("data/regime_features.csv")
 bars["datetime"] = pd.to_datetime(bars["datetime"])
 bars = bars.sort_values("datetime").fillna(0).reset_index(drop=True)
 bars = tradable_bars(bars)  # drop weekend OTC quotes / 17:00 break bars (see session_builder)
+bars = bars[bars.groupby("session_id")["datetime"].transform("size") >= MIN_SESSION_BARS].reset_index(drop=True)
 
 sess_prices = bars.groupby("session_id").agg(
     sess_open  = ("open",  "first"),
@@ -474,4 +475,3 @@ print(f"\n✅ logs/regime_v2/accuracy.txt")
 print(f"✅ logs/regime_v2/accuracy.png")
 print(f"✅ data/session_regime_v2.csv")
 print(f"✅ data/regime_v2.csv")
-print(f"\n→ Next step: python3 backtest_combined.py (update to use regime_v2)")
