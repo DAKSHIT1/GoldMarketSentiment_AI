@@ -4,10 +4,14 @@ dashboard/server.py — Gold AI Antigravity Dashboard Backend
 Run: python dashboard/server.py
 Open: http://localhost:5050
 
-Login: username=dakshit  password=gold2025
+Login credentials and the session secret come from environment variables, or from the
+gitignored config_local.py (same pattern as the bot's secrets):
+  DASHBOARD_USER, DASHBOARD_PASSWORD   — required to sign in (no default login)
+  DASHBOARD_SECRET_KEY                 — signs session cookies; if unset a random key is
+                                         generated at start-up (everyone is signed out on restart)
 """
 
-import os, json, time, requests
+import os, json, time, hmac, secrets, requests
 from datetime import datetime, timedelta
 from functools import wraps
 import xml.etree.ElementTree as ET
@@ -17,12 +21,34 @@ import numpy as np
 from flask import (Flask, render_template, request, session,
                    redirect, url_for, jsonify)
 
-app = Flask(__name__)
-app.secret_key = "goldai_antigravity_7x9k2025"
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-USERS = {"dakshit": "gold2025"}
+
+def _secret(name):
+    """Environment variable, else the gitignored config_local.py, else ''."""
+    v = os.environ.get(name, "")
+    if not v:
+        try:
+            import sys as _sys
+            _sys.path.insert(0, ROOT)
+            import config_local
+            v = getattr(config_local, name, "") or ""
+        except ImportError:
+            pass
+    return v
+
+
+app = Flask(__name__)
+app.secret_key = _secret("DASHBOARD_SECRET_KEY") or secrets.token_hex(32)
+
+_DASH_USER = _secret("DASHBOARD_USER")
+_DASH_PASSWORD = _secret("DASHBOARD_PASSWORD")
+USERS = {_DASH_USER: _DASH_PASSWORD} if _DASH_USER and _DASH_PASSWORD else {}
+
+
+def check_login(user, password):
+    expected = USERS.get(user)
+    return expected is not None and hmac.compare_digest(expected.encode(), password.encode())
 
 # ─── Signal rules: shared with the notifier and forward test ────────────────
 import sys
@@ -192,10 +218,11 @@ def login():
     if request.method == "POST":
         u = request.form.get("username","").strip()
         p = request.form.get("password","").strip()
-        if USERS.get(u) == p:
+        if check_login(u, p):
             session["user"] = u
             return redirect(url_for("dashboard"))
-        error = "Invalid credentials. Try again."
+        error = ("Invalid credentials. Try again." if USERS
+                 else "Login is not configured (set DASHBOARD_USER / DASHBOARD_PASSWORD).")
     return render_template("login.html", error=error)
 
 
@@ -336,6 +363,10 @@ if __name__ == "__main__":
     print("=" * 55)
     print("  GOLD AI ANTIGRAVITY — Dashboard Server")
     print("  http://localhost:5050")
-    print("  Login: dakshit / gold2025")
+    if USERS:
+        print("  Login: credentials from DASHBOARD_USER / DASHBOARD_PASSWORD")
+    else:
+        print("  ⚠️  Login disabled: set DASHBOARD_USER and DASHBOARD_PASSWORD "
+              "(environment or config_local.py)")
     print("=" * 55)
     app.run(debug=False, host="0.0.0.0", port=5050)
