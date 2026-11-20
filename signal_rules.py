@@ -8,31 +8,40 @@ Used by:
   * signal_notifier.py      (Telegram alerts)
   * dashboard/server.py     (live dashboard)
 
-A signal is evaluated on a COMPLETED session K (it needs that session's full
-max_up / max_down). It describes the bias for the macro window that starts
-with session K+1 and lasts WINDOW_SESSIONS sessions.
+ACTIVE STRATEGY (forward paper trading, since 2026-11-20)
+  EMA_falling_DXY_falling_LONG — the ONLY enabled rule:
+    at session K's open the EMA200 slope is falling (< -EMA_EPS) AND the dollar
+    (UUP EMA slope) is falling (< 0). Evaluated once session K has CLOSED;
+    paper entry = session K close, exit = close of session K + HOLD_SESSIONS.
+    Validation (lookahead-free walk-forward, 10-session hold, 0.02% cost):
+      OOS 2024-07 → 2026-11: 34 trades, 64.7% win vs 59.3% base, +1.77%/trade
+      Full 2020–2026:        89 trades, 60% win, +1.20%/trade, PF 2.67,
+                             max DD -12.8%, Sharpe 1.26
 
-Labelling logic mirrors forward_test_signal.get_label exactly:
+ARCHIVED: every older level / sequence / stay-out rule is kept in RULES for
+reporting (forward_test_signal.py) but is DISABLED — it never affects a live
+label. Re-validation without lookahead showed no edge over chance for them.
+
+Labelling logic (unchanged, mirrors forward_test_signal.get_label):
   1. Collect every ENABLED rule that fires on session K.
-  2. Sort by tier (STRONG > MODERATE > RANGING), then by in-sample accuracy.
+  2. Sort by tier, then by in-sample accuracy.
   3. STRONG LONG and STRONG SHORT both firing           -> CONFLICTED (no trade)
   4. Only stay-out rules firing                          -> STAY OUT
   5. Otherwise the top-ranked directional rule decides the direction.
-
-Rules whose OOS accuracy is below MIN_OOS_ACC are kept for reporting but are
-DISABLED (they never influence the live label).
+  With only the macro rule enabled this reduces to: fires -> LONG, else NO SIGNAL.
 
 Pure Python on purpose: rows may be dicts or pandas Series (anything with .get).
 """
 
-WINDOW_SESSIONS = 10      # forward window the rules were validated on
-MIN_OOS_ACC     = 55.0    # rules below this OOS accuracy are disabled
+WINDOW_SESSIONS = 10      # forward window / paper-trade hold (sessions)
+HOLD_SESSIONS   = 10      # hold for the active macro rule
 EMA_EPS         = 0.0005  # dead-zone for the EMA slope sign tests
 
-# OOS stats: logs/forward_test/signal_report.txt
-# (OOS 2025-08-08 → 2026-08-20, 356 sessions, generated before the
-#  forward-return measurement fix — see forward_test_signal.py).
-# in-sample accuracy is the value forward_test_signal.py used for ranking.
+ACTIVE_RULE_KEY = "EMA_falling_DXY_falling_LONG"
+ACTIVE_RULES    = {ACTIVE_RULE_KEY}   # everything else is archived (disabled)
+
+# Archived-rule stats: logs/forward_test/signal_report.txt (OOS 2025-08-08 →
+# 2026-08-20, generated BEFORE the lookahead fix — inflated; kept for reference).
 
 
 def _f(row, key, default=0.0):
@@ -67,6 +76,14 @@ def _seq(fn):
 
 
 RULES = [
+    # ── ACTIVE: macro pullback (the only enabled rule) ────────────────────
+    dict(key=ACTIVE_RULE_KEY, name="Macro Pullback — EMA Falling + Dollar Falling",
+         dir="LONG", tier="STRONG", hold=HOLD_SESSIONS,
+         is_acc=56.4, oos=64.7, oos_n=34,          # 10-session hold; discovery <2024-07, OOS 2024-07→2026-11
+         desc="EMA200 slope falling and dollar (UUP) falling at session open — gold pullback in a weak-dollar regime",
+         cond=lambda c, p1, p2: _es(c) < -EMA_EPS and _ds(c) < 0),
+
+    # ── ARCHIVED (disabled) ───────────────────────────────────────────────
     # ── LONG ──────────────────────────────────────────────────────────────
     dict(key="U3_EMA_bearish_LONG", name="U3 EMA Bearish", dir="LONG", tier="STRONG",
          is_acc=77.8, oos=72.4, oos_n=29,
@@ -191,7 +208,7 @@ RULES = [
 ]
 
 for _r in RULES:
-    _r["enabled"] = _r["dir"] == "NEUTRAL" or (_r["oos"] is not None and _r["oos"] >= MIN_OOS_ACC)
+    _r["enabled"] = _r["key"] in ACTIVE_RULES
 
 RULES_BY_KEY = {r["key"]: r for r in RULES}
 ENABLED_RULES = [r for r in RULES if r["enabled"]]

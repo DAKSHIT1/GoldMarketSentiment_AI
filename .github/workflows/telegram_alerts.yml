@@ -1,8 +1,10 @@
 name: Gold AI Telegram Alerts
 
-# One alert per COMPLETED session (18:00 → 17:00 New York).
+# Forward paper trading of the single macro rule (signal_rules.ACTIVE_RULE_KEY).
+# Every COMPLETED session (18:00 → 17:00 New York) is processed exactly once;
+# Telegram messages only when a paper trade OPENS or CLOSES (or data goes stale).
 # Sessions close at 21:00/22:00 UTC; the 02:30 UTC run (08:00 IST) sends the
-# alert for the session that just closed. The 04:30 UTC run is a backup in case
+# session that just closed. The 04:30 UTC run is a backup in case
 # GitHub drops a scheduled run — dedup (state/notifier_state.json) makes it a
 # no-op when the alert was already sent. Weekend runs are also no-ops.
 on:
@@ -13,15 +15,15 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'auto = send if new | dry-run = print only | test = send TEST copy | force = resend latest'
+        description: 'auto = process new sessions | dry-run = print only | status = send paper-trade status | test = send TEST status'
         required: true
         default: 'auto'
         type: choice
         options:
           - auto
           - dry-run
+          - status
           - test
-          - force
 
 permissions:
   contents: write
@@ -65,7 +67,7 @@ jobs:
           case "$MODE" in
             dry-run) python signal_notifier.py --auto --no-refresh --dry-run ;;
             test)    python signal_notifier.py --auto --no-refresh --test ;;
-            force)   python signal_notifier.py --auto --no-refresh --force ;;
+            status)  python signal_notifier.py --auto --no-refresh --status ;;
             *)       python signal_notifier.py --auto --no-refresh ;;
           esac
 
