@@ -111,17 +111,20 @@ def backtest_combined():
     sess_sigs = pd.read_csv("logs/forward_test/session_signals.csv")
     sess_sigs["date"] = pd.to_datetime(sess_sigs["date"])
     
-    # Create a mapping of Session Date -> Allowed Direction
-    # CRITICAL: We shift the signal by 1 so a signal generated at the end of session K applies to session K+1
+    # Map SESSION -> allowed direction.
+    # A signal generated when session K CLOSES applies to session K+1.
+    # Sessions run 18:00 → 17:00 New York, so they must be keyed by their
+    # 18:00 start, NOT by calendar date: the London/NY bars of calendar day D
+    # belong to the session that started at 18:00 on D-1. (Keying by calendar
+    # date previously let session K trade on its own signal — lookahead.)
+    sess_sigs = sess_sigs.sort_values("date").reset_index(drop=True)
     sess_sigs["next_date"] = sess_sigs["date"].shift(-1)
-    
-    # We only care about LONG and SHORT signals
+
     signal_map = {}
     for _, row in sess_sigs.dropna(subset=["next_date"]).iterrows():
-        next_dt = row["next_date"].date()
         d = row["direction"]
         if d in ["LONG", "SHORT"]:
-            signal_map[next_dt] = d
+            signal_map[row["next_date"].date()] = d   # key = start date of session K+1
 
     # 2. Load bar data
     print("Loading features...")
@@ -177,6 +180,8 @@ def backtest_combined():
         dt   = row["datetime"]
         hour = dt.hour
         day  = dt.date()
+        # start date of the 18:00 NY session this bar belongs to
+        sess_day = (dt - pd.Timedelta(hours=18)).date()
 
         # Daily reset / Session mapping
         if day != current_day:
@@ -186,7 +191,7 @@ def backtest_combined():
             day_paused        = False
             
         # ── COMBINATORIAL FILTER (The Unified Edge) ──
-        allowed_dir = signal_map.get(day, "NONE")
+        allowed_dir = signal_map.get(sess_day, "NONE")
 
         if day_paused:               i += 1; continue
         if hour not in VALID_HOURS:  skipped_session_hrs += 1; i += 1; continue

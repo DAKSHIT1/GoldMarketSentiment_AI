@@ -24,24 +24,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 USERS = {"dakshit": "gold2025"}
 
-# ─── Signal weights (from OOS forward test) ───────────────────────────────
-SIGNAL_META = {
-    # LONG signals
-    "U4 Overextension":       dict(dir="LONG",  tier="STRONG",  oos=84.6, desc="U4 broke but EMA bearish — extreme overshoot, snap back UP"),
-    "U3 EMA Bearish":         dict(dir="LONG",  tier="STRONG",  oos=77.3, desc="U3 broke, EMA still bearish — overextension LONG"),
-    "U2 EMA Bearish":         dict(dir="LONG",  tier="STRONG",  oos=75.0, desc="U2 broke but EMA bearish — bull exhaustion signal"),
-    "U1 EMA Bearish":         dict(dir="LONG",  tier="STRONG",  oos=78.6, desc="U1 broke, EMA bearish — overextension entry zone"),
-    "L1 False Break":         dict(dir="LONG",  tier="STRONG",  oos=78.3, desc="Hit L1 AND U1 same session — false break, look LONG"),
-    "U3 Rebound":             dict(dir="LONG",  tier="STRONG",  oos=70.0, desc="Hit U3 then reversed in-session — LONG reversal setup"),
-    "U1 + VWAP + DXY Fall":   dict(dir="LONG",  tier="MODERATE",oos=69.8, desc="U1 + VWAP bullish + DXY falling (weak dollar)"),
-    "Pure Up + VWAP Bull":    dict(dir="LONG",  tier="MODERATE",oos=68.5, desc="Pure upside session, no L1 touch, VWAP bullish"),
-    "U2 + EMA Bull":          dict(dir="LONG",  tier="MODERATE",oos=55.4, desc="Broke U2 + EMA bullish — trend continuation"),
-    "U2 + VWAP Bull":         dict(dir="LONG",  tier="MODERATE",oos=57.8, desc="Broke U2 + VWAP bullish — moderate LONG setup"),
-    # SHORT signals
-    "L4 Overextension":       dict(dir="SHORT", tier="STRONG",  oos=72.7, desc="L4 broke with bullish EMA — extreme overshoot DOWN"),
-    "L3 EMA Bull":            dict(dir="SHORT", tier="STRONG",  oos=56.2, desc="L3 broke, EMA still bullish — overextension SHORT"),
-    "BEST Short Macro":       dict(dir="SHORT", tier="STRONG",  oos=50.0, desc="L2+ + EMA bearish + DXY rising — full macro SHORT"),
-}
+# ─── Signal rules: shared with the notifier and forward test ────────────────
+import sys
+sys.path.insert(0, ROOT)
+import signal_rules
+
 
 _news_cache = {"data": [], "ts": 0}
 
@@ -75,100 +62,10 @@ def _safe_float(val, default=0.0):
         return default
 
 
-def compute_signal(row):
-    """Apply all 26 conditions to one session row. Returns signal dict."""
-    mu  = _safe_float(row.get("max_up",  0))
-    md  = _safe_float(row.get("max_down", 0))
-    es  = _safe_float(row.get("ema_slope", 0))
-    vs  = _safe_float(row.get("vwap_slope", 0))
-    ds  = _safe_float(row.get("dxy_slope", 0))
-    ibd = int(_safe_float(row.get("is_bidir", 0)))
-    lfb = int(_safe_float(row.get("l1_false_brk", 0)))
-    flp = _safe_float(row.get("roll_flip_rate", 0))
-
-    # ── STAY OUT checks ───────────────────────────────────────────────────
-    if flp >= 35:
-        return _neutral("Flip rate ≥35% — market is choppy, no edge")
-    if mu < 1 and md < 1:
-        return _neutral("No level broken — price consolidating inside levels")
-    if mu >= 1 and md >= 1 and mu < 2 and md < 2:
-        return _neutral("Hit L1 AND U1 same session — ranging / trapped")
-
-    active = {}
-
-    # ── LONG conditions ───────────────────────────────────────────────────
-    if mu >= 4 and es < -0.0005:
-        active["U4 Overextension"] = SIGNAL_META["U4 Overextension"]
-    if mu >= 3 and es < -0.0005:
-        active["U3 EMA Bearish"]   = SIGNAL_META["U3 EMA Bearish"]
-    if mu >= 2 and es < -0.0005:
-        active["U2 EMA Bearish"]   = SIGNAL_META["U2 EMA Bearish"]
-    if mu >= 1 and es < -0.0005:
-        active["U1 EMA Bearish"]   = SIGNAL_META["U1 EMA Bearish"]
-    if mu >= 3 and ibd == 1:
-        active["U3 Rebound"]       = SIGNAL_META["U3 Rebound"]
-    if lfb == 1 and mu >= 1:
-        active["L1 False Break"]   = SIGNAL_META["L1 False Break"]
-    if mu >= 1 and md < 1 and vs > 0:
-        active["Pure Up + VWAP Bull"] = SIGNAL_META["Pure Up + VWAP Bull"]
-    if mu >= 2 and vs > 0:
-        active["U2 + VWAP Bull"]   = SIGNAL_META["U2 + VWAP Bull"]
-    if mu >= 2 and es > 0.0005:
-        active["U2 + EMA Bull"]    = SIGNAL_META["U2 + EMA Bull"]
-    if mu >= 1 and vs > 0 and ds < 0:
-        active["U1 + VWAP + DXY Fall"] = SIGNAL_META["U1 + VWAP + DXY Fall"]
-
-    # ── SHORT conditions ──────────────────────────────────────────────────
-    if md >= 4 and es > 0.0005:
-        active["L4 Overextension"] = SIGNAL_META["L4 Overextension"]
-    if md >= 3 and es > 0.0005:
-        active["L3 EMA Bull"]      = SIGNAL_META["L3 EMA Bull"]
-    if md >= 2 and es < -0.0005 and ds > 0:
-        active["BEST Short Macro"] = SIGNAL_META["BEST Short Macro"]
-
-    long_sigs  = {k:v for k,v in active.items() if v["dir"]=="LONG"}
-    short_sigs = {k:v for k,v in active.items() if v["dir"]=="SHORT"}
-
-    if not long_sigs and not short_sigs:
-        return _neutral("No qualifying signal — wait for setup")
-
-    long_conf  = np.mean([v["oos"] for v in long_sigs.values()])  if long_sigs  else 0
-    short_conf = np.mean([v["oos"] for v in short_sigs.values()]) if short_sigs else 0
-
-    # ── CONFLICTED: both directions active ────────────────────────────────
-    # When is_bidir=1 AND both LONG+SHORT conditions fire, the session hit
-    # upper AND lower levels — too chaotic, treat as NEUTRAL
-    if long_sigs and short_sigs:
-        return _neutral(f"Conflicting signals (L:{long_conf:.0f}% vs S:{short_conf:.0f}%) — CONFLICTED")
-
-    if long_sigs and not short_sigs:
-        return _directional("LONG", long_sigs, long_conf)
-    elif short_sigs and not long_sigs:
-        return _directional("SHORT", short_sigs, short_conf)
-    else:
-        return _neutral(f"Conflicting signals (L:{long_conf:.0f}% vs S:{short_conf:.0f}%)")
-
-
-def _neutral(reason):
-    return {"direction":"NEUTRAL","confidence":0,"tier":"RANGING",
-            "reason":reason,"signals":[],"key_signal":None}
-
-
-def _directional(direction, sigs, conf):
-    strong = {k:v for k,v in sigs.items() if v["tier"]=="STRONG"}
-    key    = max(sigs, key=lambda k: sigs[k]["oos"])
-    tier   = "STRONG" if strong else "MODERATE"
-    n      = len(sigs)
-    reason = f"{n} signal{'s' if n>1 else ''} confirm {'bullish' if direction=='LONG' else 'bearish'} window"
-    return {
-        "direction":  direction,
-        "confidence": round(float(conf), 1),
-        "tier":       tier,
-        "reason":     reason,
-        "signals":    [{"name":k,"acc":v["oos"],"tier":v["tier"],"desc":v["desc"]}
-                       for k,v in sigs.items()],
-        "key_signal": {"name":key,"desc":sigs[key]["desc"],"acc":sigs[key]["oos"]}
-    }
+def compute_signal(df, i=None):
+    """Label session i (default: latest) with the shared rules in signal_rules.py."""
+    recs = df.to_dict("records")
+    return signal_rules.classify_at(recs, len(recs) - 1 if i is None else i)
 
 
 def fetch_gold_news():
@@ -321,7 +218,7 @@ def api_signal():
     try:
         df  = load_sessions()
         row = df.iloc[-1]
-        sig = compute_signal(row)
+        sig = compute_signal(df)
         sig["date"] = str(row["date"].date())
         sig["levels"] = {
             "max_up":   float(row.get("max_up", 0) or 0),

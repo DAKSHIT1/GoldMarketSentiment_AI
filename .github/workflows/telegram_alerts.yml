@@ -1,33 +1,43 @@
 name: Gold AI Telegram Alerts
 
+# One alert per COMPLETED session (18:00 → 17:00 New York).
+# Sessions close at 21:00/22:00 UTC; the 02:30 UTC run (08:00 IST) sends the
+# alert for the session that just closed. The 04:30 UTC run is a backup in case
+# GitHub drops a scheduled run — dedup (state/notifier_state.json) makes it a
+# no-op when the alert was already sent. Weekend runs are also no-ops.
 on:
   schedule:
-    # Gold market trading days (Monday - Friday)
-    # Times in UTC (IST is UTC + 5:30)
-    # 08:00 AM IST = 02:30 UTC (London Open Alert)
-    - cron: '30 2 * * 1-5'
-    # 02:00 PM IST = 08:30 UTC (New York Open Alert)
-    - cron: '30 8 * * 1-5'
-    # 11:30 PM IST = 18:00 UTC (End of Day Report)
-    - cron: '0 18 * * 1-5'
+    - cron: '30 2 * * *'
+    - cron: '30 4 * * *'
 
   workflow_dispatch:
     inputs:
-      session:
-        description: 'Session alert to send'
+      mode:
+        description: 'auto = send if new | dry-run = print only | test = send TEST copy | force = resend latest'
         required: true
         default: 'auto'
         type: choice
         options:
           - auto
-          - london
-          - ny
-          - eod
+          - dry-run
           - test
+          - force
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gold-ai-telegram
+  cancel-in-progress: false
 
 jobs:
   send-telegram-alert:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -36,21 +46,40 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
 
       - name: Install Dependencies
-        run: |
-          pip install requests pandas numpy
+        run: pip install pandas==2.3.3 numpy==2.4.2 requests==2.32.5 yfinance==1.2.0
+
+      - name: Refresh market data and sessions
+        id: refresh
+        continue-on-error: true   # if this fails the notifier's stale-data guard alerts instead
+        run: python refresh_data.py
+
+      - name: Verify live/batch session parity
+        run: python verify_parity.py 30
 
       - name: Run Gold AI Telegram Notifier
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "Running manual dispatch with --${{ inputs.session }}"
-            python signal_notifier.py --${{ inputs.session }}
+          MODE="${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'auto' }}"
+          echo "Mode: $MODE"
+          case "$MODE" in
+            dry-run) python signal_notifier.py --auto --no-refresh --dry-run ;;
+            test)    python signal_notifier.py --auto --no-refresh --test ;;
+            force)   python signal_notifier.py --auto --no-refresh --force ;;
+            *)       python signal_notifier.py --auto --no-refresh ;;
+          esac
+
+      - name: Commit refreshed data and dedup state
+        if: always()
+        run: |
+          git config user.name  "gold-ai-bot"
+          git config user.email "gold-ai-bot@users.noreply.github.com"
+          git add data/gold_15m_full.csv data/uup_1d.csv data/ief_1d.csv data/session_regime_v2.csv
+          if [ -f state/notifier_state.json ]; then git add state/notifier_state.json; fi
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
           else
-            echo "Running scheduled cron with --auto"
-            python signal_notifier.py --auto
+            git commit -m "chore: refresh session data and notifier state [skip ci]"
+            git pull --rebase --autostash
+            git push
           fi

@@ -1,4 +1,12 @@
-API_KEY = "dc267dbc2e4f4d9ea4d72886c412053d"
+import os
+
+# TwelveData key: env var (GitHub Actions secret) or gitignored config_local.py
+API_KEY = os.environ.get("TWELVEDATA_API_KEY", "")
+if not API_KEY:
+    try:
+        from config_local import API_KEY
+    except ImportError:
+        pass
 
 SYMBOL = "XAU/USD"
 

@@ -44,30 +44,7 @@ os.makedirs("logs/regime_v2", exist_ok=True)
 # ─────────────────────────────────────────────────────────────────────────────
 #  THRESHOLDS (derived from short_regime_analysis.py findings)
 # ─────────────────────────────────────────────────────────────────────────────
-# LONG
-LONG_PU2_MIN      = 35.0   # rolling P(U2|U1) >= 35% in last 10 sessions
-LONG_AVG_UP_RATIO = 1.0    # avg_max_up must exceed avg_max_down
-
-# SHORT_TREND (macro-confirmed — loosened so more sessions qualify)
-# Removed DXY gate (gold is structurally bullish so DXY+EMA combo is too rare)
-# EMA slope is sufficient macro confirmation
-ST_MIN_DOWN_LEVEL = 1.5    # rolling avg max down >= 1.5 (was 2.0)
-ST_EMA_MAX        = -0.0005 # EMA50 slope NEGATIVE — loosened slightly (was -0.001)
-ST_PL2_MIN        = 20.0   # rolling P(L2|L1) >= 20% (was 30%)
-ST_L1_FREQ_MIN    = 30.0   # L1 broke in >=30% of last 10 sessions (trending down)
-
-# SHORT_EXHAUST (overextension, works even in bull market)
-SE_MIN_DOWN_LEVEL = 3.0    # max_down >= 3 in recent sessions
-SE_RECENT_WINDOW  = 5      # sessions to look back
-SE_PL3_MIN        = 15.0   # rolling P(L3|L1) >= 15% (extreme moves happening)
-
-# NEUTRAL overrides
-FLIP_RATE_MAX     = 25.0   # if flip rate > 25% → ranging, avoid
-NO_BREAK_MAX      = 60.0   # if > 60% sessions ranging → avoid (unless clear signal)
-FALSE_BREAK_GATE  = True   # exclude L1-only false breaks (no L2 reached)
-
-# Retest continuation bonus (multiplier to confidence)
-RETEST_CONT_BONUS = True   # bonus if L2_retest_continue_L3 pattern detected
+from session_builder import *   # thresholds, build_session_db_v2, rolling, classify_v2
 
 FORWARD_SESSIONS = 10
 print("=" * 70)
@@ -110,55 +87,6 @@ print(f"Price data joined.")
 # ─────────────────────────────────────────────────────────────────────────────
 print("\nBuilding session-level features from bar data...")
 
-def build_session_db_v2(bars_df):
-    records = []
-    for sid, grp in bars_df.groupby("session_id"):
-        grp = grp.reset_index(drop=True)
-        max_up   = float(grp["seq_max_levels_up"].max())   if "seq_max_levels_up"   in grp.columns else 0.0
-        max_down = float(grp["seq_max_levels_down"].max()) if "seq_max_levels_down" in grp.columns else 0.0
-        first_up = first_dn = None
-        for i in range(len(grp)):
-            if first_up is None and grp["seq_levels_broken_up"].iloc[i]   >= 1: first_up = i
-            if first_dn is None and grp["seq_levels_broken_down"].iloc[i] >= 1: first_dn = i
-            if first_up is not None and first_dn is not None: break
-        if   first_up is not None and first_dn is not None:
-            dir_first = "up" if first_up < first_dn else "down"
-        elif first_up is not None: dir_first = "up"
-        elif first_dn is not None: dir_first = "down"
-        else:                      dir_first = "neither"
-
-        ema_slope  = float(grp["ema50_slope"].iloc[0])    if "ema50_slope"          in grp.columns else 0.0
-        dxy_slope  = float(grp["dxy_ema_slope"].iloc[0])  if "dxy_ema_slope"        in grp.columns else 0.0
-        macro_str  = float(grp["macro_trend_strength"].iloc[0]) if "macro_trend_strength" in grp.columns else 0.0
-        vwap_slope = float(grp["vwap_slope"].iloc[0])     if "vwap_slope"           in grp.columns else 0.0
-        atr        = float(grp["atr"].mean())              if "atr"                  in grp.columns else 5.0
-
-        records.append({
-            "sid"       : sid,
-            "date"      : grp["datetime"].iloc[0],
-            "max_up"    : max_up,
-            "max_down"  : max_down,
-            "dir_first" : dir_first,
-            "sess_open" : float(grp["open"].iloc[0]),
-            "sess_close": float(grp["close"].iloc[-1]),
-            "ema_slope" : ema_slope,
-            "dxy_slope" : dxy_slope,
-            "macro_str" : macro_str,
-            "vwap_slope": vwap_slope,
-            "atr"       : atr,
-            "broke_u1"  : int(max_up   >= 1),
-            "broke_u2"  : int(max_up   >= 2),
-            "broke_u3"  : int(max_up   >= 3),
-            "broke_l1"  : int(max_down >= 1),
-            "broke_l2"  : int(max_down >= 2),
-            "broke_l3"  : int(max_down >= 3),
-            "is_bidir"  : int(max_up >= 1 and max_down >= 1),
-            "is_no_brk" : int(max_up < 1 and max_down < 1),
-            "is_l1_only": int(max_down >= 1 and max_down < 2),
-            "l1_false_brk": int(max_down >= 1 and max_down < 2 and max_up >= 1),
-        })
-    return pd.DataFrame(records)
-
 sess_v2 = build_session_db_v2(bars)
 sess_v2["date"] = pd.to_datetime(sess_v2["date"])
 sess_v2 = sess_v2.sort_values("date").reset_index(drop=True)
@@ -166,35 +94,7 @@ sess_v2 = sess_v2.sort_values("date").reset_index(drop=True)
 # ─────────────────────────────────────────────────────────────────────────────
 #  ROLLING FEATURES (10-session window)
 # ─────────────────────────────────────────────────────────────────────────────
-ROLL = 10
-
-def safe_div(a, b): return a / b if b > 0 else 0.0
-
-for i in range(len(sess_v2)):
-    w = sess_v2.iloc[max(0, i-ROLL):i]
-    n_w = len(w)
-    if n_w == 0:
-        for col in ["roll_p_u2_u1","roll_p_l2_l1","roll_p_l3_l1",
-                    "roll_avg_max_up","roll_avg_max_down",
-                    "roll_flip_rate","roll_no_break_pct",
-                    "roll_avg_ema","roll_avg_dxy",
-                    "roll_l3plus_pct","roll_l1_freq"]:
-            sess_v2.loc[i, col] = 0.0
-        continue
-
-    n_u1 = max(w["broke_u1"].sum(), 1)
-    n_l1 = max(w["broke_l1"].sum(), 1)
-    sess_v2.loc[i, "roll_p_u2_u1"]      = safe_div(w["broke_u2"].sum(), n_u1) * 100
-    sess_v2.loc[i, "roll_p_l2_l1"]      = safe_div(w["broke_l2"].sum(), n_l1) * 100
-    sess_v2.loc[i, "roll_p_l3_l1"]      = safe_div(w["broke_l3"].sum(), n_l1) * 100
-    sess_v2.loc[i, "roll_avg_max_up"]   = w["max_up"].mean()
-    sess_v2.loc[i, "roll_avg_max_down"] = w["max_down"].mean()
-    sess_v2.loc[i, "roll_flip_rate"]    = w["is_bidir"].mean() * 100
-    sess_v2.loc[i, "roll_no_break_pct"] = w["is_no_brk"].mean() * 100
-    sess_v2.loc[i, "roll_avg_ema"]      = w["ema_slope"].mean()
-    sess_v2.loc[i, "roll_avg_dxy"]      = w["dxy_slope"].mean()
-    sess_v2.loc[i, "roll_l3plus_pct"]   = (w["max_down"] >= 3).mean() * 100
-    sess_v2.loc[i, "roll_l1_freq"]      = w["broke_l1"].mean() * 100
+sess_v2 = add_rolling_features(sess_v2)
 
 sess_v2 = sess_v2.fillna(0)
 
@@ -225,61 +125,6 @@ sess_v2["fwd_down"] = 1.0 - fwd_up
 #  APPLY FIXED REGIME RULES
 # ─────────────────────────────────────────────────────────────────────────────
 print("\nApplying fixed regime rules v2...")
-
-def classify_v2(row):
-    p_u2  = row["roll_p_u2_u1"]
-    p_l2  = row["roll_p_l2_l1"]
-    p_l3  = row["roll_p_l3_l1"]
-    mu    = row["roll_avg_max_up"]
-    md    = row["roll_avg_max_down"]
-    flip  = row["roll_flip_rate"]
-    nb    = row["roll_no_break_pct"]
-    ema   = row["ema_slope"]          # current session EMA
-    dxy   = row["dxy_slope"]          # current session DXY
-    l3pct = row["roll_l3plus_pct"]
-    l1freq= row["roll_l1_freq"]
-    max_d = row["max_down"]           # THIS session
-    max_u = row["max_up"]             # THIS session
-    l1_fb = row["l1_false_brk"]       # false break flag
-
-    # ── HARD EXCLUSIONS (NEUTRAL override) ─────────────────────────────────
-    # 1. False break — L1 only AND reversed same session → stay out
-    if l1_fb == 1 and max_d < 2:
-        return "NEUTRAL"
-    # 2. Flip / bidirectional — can't trust direction
-    if flip > FLIP_RATE_MAX and max_d < 2:
-        return "NEUTRAL"
-    # 3. High L1 frequency with NO L2 progression = ranging
-    if l1freq > 55 and p_l2 < 20:
-        return "NEUTRAL"
-
-    # ── LONG ───────────────────────────────────────────────────────────────
-    if (p_u2 >= LONG_PU2_MIN and
-        mu > md * LONG_AVG_UP_RATIO and
-        p_u2 > p_l2):
-        return "LONG"
-
-    # ── SHORT_TREND (macro-confirmed downtrend — relaxed) ──────────────────
-    # Requires: level depth + bearish EMA + L1 break frequency
-    # DXY removed: too rare for gold (structural bull asset)
-    if (md >= ST_MIN_DOWN_LEVEL and
-        p_l2 >= ST_PL2_MIN and
-        ema  <= ST_EMA_MAX and
-        l1freq >= ST_L1_FREQ_MIN):
-        return "SHORT_TREND"
-
-    # ── SHORT_EXHAUST (overextension snap-back, works in bull mkt) ─────────
-    # L3+ broke recently AND current session shows extreme downside
-    # Confirmed to be 66-84% accurate from analysis
-    if (l3pct >= SE_PL3_MIN or max_d >= SE_MIN_DOWN_LEVEL):
-        # Extra confirmation: must not be recovering (no strong U1 in same sess)
-        if max_u < 1:  # pure downside session — more reliable
-            return "SHORT_EXHAUST"
-        # Even with a bounce, if went to L3+, still valid
-        if max_d >= SE_MIN_DOWN_LEVEL:
-            return "SHORT_EXHAUST"
-
-    return "NEUTRAL"
 
 sess_v2["regime_v2"] = sess_v2.apply(classify_v2, axis=1)
 

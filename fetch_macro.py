@@ -13,7 +13,7 @@ def download_macro_yahoo(symbol, output_file):
     print(f"Downloading {symbol} daily data via Yahoo Finance...")
     
     try:
-        df = yf.download(symbol, start="2014-01-01", end="2026-12-31", interval="1d", progress=False)
+        df = yf.download(symbol, start="2014-01-01", interval="1d", progress=False)
         
         if df is None or len(df) == 0:
             print(f"No data for {symbol}")

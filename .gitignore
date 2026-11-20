@@ -6,3 +6,4 @@ catboost_info/
 data/gold_features.csv
 data/regime_features.csv
 data/regime_v2.csv
+config_local.py

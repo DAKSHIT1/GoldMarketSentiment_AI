@@ -27,6 +27,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import signal_rules
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -70,7 +71,10 @@ def build_fwd(df, fw=FW):
     fwd_up  = np.full(len(df), np.nan)
     fwd_pts = np.full(len(df), np.nan)
     for i in range(len(df) - fw):
-        s = df.iloc[i]["sess_open"]
+        # Signal for session i is only known once session i has CLOSED, so the
+        # forward return starts at its close (was: its open → included the
+        # very move that produced the signal).
+        s = df.iloc[i]["sess_close"]
         e = df.iloc[i + fw]["sess_close"]
         if pd.isna(s) or s <= 0: continue
         fwd_pts[i] = e - s
@@ -107,303 +111,32 @@ def flag(acc):
 #  Each returns (mask_for_insample, mask_for_oos, direction, tier, description)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def col(df, c, default=0):
-    return df[c] if c in df.columns else pd.Series([default]*len(df), index=df.index)
+# Rules come from signal_rules.py (shared with the notifier and dashboard).
+# Masks are evaluated on the FULL session table so sequence rules at the start
+# of the OOS split can see their two previous sessions.
+ALL_RECS = sess.to_dict("records")
+ALL_FIRED = [set(r["key"] for r in signal_rules.firing_rules(
+                 ALL_RECS[i], ALL_RECS[i-1] if i >= 1 else None,
+                 ALL_RECS[i-2] if i >= 2 else None, include_disabled=True))
+             for i in range(N)]
 
-def define_signals(df):
-    mu   = col(df, "max_up");        md   = col(df, "max_down")
-    es   = col(df, "ema_slope");     ds   = col(df, "dxy_slope")
-    vs   = col(df, "vwap_slope");    ibd  = col(df, "is_bidir")
-    lfb  = col(df, "l1_false_brk");  flp  = col(df, "roll_flip_rate")
-    l3p  = col(df, "roll_l3plus_pct")
-    p_l2 = col(df, "roll_p_l2_l1");  p_u2 = col(df, "roll_p_u2_u1")
-    avg_mu = col(df, "roll_avg_max_up"); avg_md = col(df, "roll_avg_max_down")
-
+def define_signals(df, offset=0):
     signals = {}
-
-    # ── LONG SIGNALS ──────────────────────────────────────────────────────
-    # 1. U3 overextension (EMA bearish → LONG, 77.8%)
-    signals["U3_EMA_bearish_LONG"] = {
-        "mask" : (mu >= 3) & (es < -0.0005),
-        "dir"  : "LONG", "tier": "STRONG",
-        "insample_acc": 77.8, "n_is": 30,
-        "desc" : "U3 broke, EMA still bearish — overextension, snap back UP",
-    }
-    # 2. U4 overextension (EMA bearish → LONG, 84.6%)
-    signals["U4_EMA_bearish_LONG"] = {
-        "mask" : (mu >= 4) & (es < -0.0005),
-        "dir"  : "LONG", "tier": "STRONG",
-        "insample_acc": 84.6, "n_is": 14,
-        "desc" : "U4 broke, EMA still bearish — extreme overextension LONG",
-    }
-    # 3. U2 break + EMA bearish (counter-trend, 76.1%)
-    signals["U2_EMA_bearish_LONG"] = {
-        "mask" : (mu >= 2) & (es < -0.0005),
-        "dir"  : "LONG", "tier": "STRONG",
-        "insample_acc": 76.1, "n_is": 67,
-        "desc" : "U2 broke but EMA bearish — bull exhaustion LONG",
-    }
-    # 4. U1 break + EMA bearish (counter-trend, 74.2%)
-    signals["U1_EMA_bearish_LONG"] = {
-        "mask" : (mu >= 1) & (es < -0.0005),
-        "dir"  : "LONG", "tier": "STRONG",
-        "insample_acc": 74.2, "n_is": 221,
-        "desc" : "U1 broke, EMA bearish — overextension LONG signal",
-    }
-    # 5. U3 rebound (bidirectional at U3, 76.9%)
-    signals["U3_REBOUND_LONG"] = {
-        "mask" : (mu >= 3) & (ibd == 1),
-        "dir"  : "LONG", "tier": "STRONG",
-        "insample_acc": 76.9, "n_is": 13,
-        "desc" : "Hit U3 then reversed in same session — look for LONG entry",
-    }
-    # 6. L3→L2→L1 rising lows (3-session, ~65%)
-    def rising_lows(df):
-        mask = np.zeros(len(df), dtype=bool)
-        md_arr = df["max_down"].values if "max_down" in df.columns else np.zeros(len(df))
-        for i in range(2, len(df)):
-            if (md_arr[i-2] >= 3 and
-                md_arr[i-1] >= 2 and md_arr[i-1] < 3 and
-                md_arr[i]   >= 1 and md_arr[i]   < 2):
-                mask[i] = True
-        return mask
-    signals["L3_L2_L1_rising_lows"] = {
-        "mask" : rising_lows(df),
-        "dir"  : "LONG", "tier": "STRONG",
-        "insample_acc": 65.0, "n_is": 30,
-        "desc" : "3-session rising low pattern: L3→L2→L1 — downside exhausting",
-    }
-    # 7. L1 false break → LONG (69.2%)
-    signals["L1_false_break_LONG"] = {
-        "mask" : (lfb == 1) & (mu >= 1),
-        "dir"  : "LONG", "tier": "STRONG",
-        "insample_acc": 69.2, "n_is": 52,
-        "desc" : "Same session hit L1 AND U1 (false break down) — LONG signal",
-    }
-    # 8. Pure up session + VWAP bullish (65%)
-    signals["Pure_up_VWAP_bull_LONG"] = {
-        "mask" : (mu >= 1) & (md < 1) & (vs > 0),
-        "dir"  : "LONG", "tier": "MODERATE",
-        "insample_acc": 65.0, "n_is": 140,
-        "desc" : "Pure upside session with VWAP bullish slope — clean LONG",
-    }
-    # 9. U2 break + VWAP bullish (57.8%)
-    signals["U2_VWAP_bull_LONG"] = {
-        "mask" : (mu >= 2) & (vs > 0),
-        "dir"  : "LONG", "tier": "MODERATE",
-        "insample_acc": 57.8, "n_is": 43,
-        "desc" : "Broke U2 + VWAP bullish — moderate LONG signal",
-    }
-    # 10. U2 break + EMA bullish (56.5%)
-    signals["U2_EMA_bull_LONG"] = {
-        "mask" : (mu >= 2) & (es > 0.0005),
-        "dir"  : "LONG", "tier": "MODERATE",
-        "insample_acc": 56.5, "n_is": 46,
-        "desc" : "Broke U2 + EMA bullish — trend following LONG",
-    }
-    # 11. U2 break + VWAP + EMA bullish (58.9%)
-    signals["U2_VWAP_EMA_bull_LONG"] = {
-        "mask" : (mu >= 2) & (vs > 0) & (es > 0.0005),
-        "dir"  : "LONG", "tier": "MODERATE",
-        "insample_acc": 58.9, "n_is": 107,
-        "desc" : "Broke U2 + VWAP + EMA both bullish — high confluence LONG",
-    }
-    # 12. U1 break + VWAP bull + DXY falling (66.7% for U2+DXY)
-    signals["U1_VWAP_DXY_fall_LONG"] = {
-        "mask" : (mu >= 1) & (vs > 0) & (ds < 0),
-        "dir"  : "LONG", "tier": "MODERATE",
-        "insample_acc": 66.5, "n_is": 120,
-        "desc" : "U1 broke + VWAP bullish + DXY falling (weak dollar) — LONG",
-    }
-    # 13. U2→pullback→U3 (2-session, ~75%, small n)
-    def u2_pullback_u3(df):
-        mask = np.zeros(len(df), dtype=bool)
-        mu_arr = df["max_up"].values if "max_up" in df.columns else np.zeros(len(df))
-        md_arr = df["max_down"].values if "max_down" in df.columns else np.zeros(len(df))
-        for i in range(2, len(df)):
-            if (mu_arr[i-2] >= 2 and
-                md_arr[i-1] >= 1 and mu_arr[i-1] < 2 and
-                mu_arr[i]   >= 3):
-                mask[i] = True
-        return mask
-    signals["U2_pullback_U3_LONG"] = {
-        "mask" : u2_pullback_u3(df),
-        "dir"  : "LONG", "tier": "MODERATE",
-        "insample_acc": 75.0, "n_is": 4,
-        "desc" : "U2 break → pullback to L1 → U3 continuation",
-    }
-    # 14. Range→Range→U2+ breakout (69%)
-    def range_breakout(df):
-        mask = np.zeros(len(df), dtype=bool)
-        ibd_arr = df["is_bidir"].values if "is_bidir" in df.columns else np.zeros(len(df))
-        mu_arr  = df["max_up"].values if "max_up" in df.columns else np.zeros(len(df))
-        md_arr  = df["max_down"].values if "max_down" in df.columns else np.zeros(len(df))
-        for i in range(2, len(df)):
-            if (ibd_arr[i-2] == 1 and
-                ibd_arr[i-1] == 1 and
-                mu_arr[i] >= 2 and md_arr[i] < 1):
-                mask[i] = True
-        return mask
-    signals["Range_breakout_up_LONG"] = {
-        "mask" : range_breakout(df),
-        "dir"  : "LONG", "tier": "MODERATE",
-        "insample_acc": 69.2, "n_is": 12,
-        "desc" : "2 ranging sessions then clean U2+ breakout",
-    }
-
-    # ── SHORT SIGNALS ─────────────────────────────────────────────────────
-    # 1. L3+ overextension, EMA bullish (66.7%)
-    signals["L3_EMA_bull_SHORT"] = {
-        "mask" : (md >= 3) & (es > 0.0005),
-        "dir"  : "SHORT", "tier": "STRONG",
-        "insample_acc": 66.7, "n_is": 30,
-        "desc" : "L3 broke but EMA still bullish — overextension, snap back DOWN",
-    }
-    # 2. L3+ overextension, VWAP bullish (68%)
-    signals["L3_VWAP_bull_SHORT"] = {
-        "mask" : (md >= 3) & (vs > 0),
-        "dir"  : "SHORT", "tier": "STRONG",
-        "insample_acc": 68.0, "n_is": 25,
-        "desc" : "L3 broke but VWAP still bullish — extreme overextension SHORT",
-    }
-    # 3. L4+ overextension, EMA bullish (78.6%)
-    signals["L4_EMA_bull_SHORT"] = {
-        "mask" : (md >= 4) & (es > 0.0005),
-        "dir"  : "SHORT", "tier": "STRONG",
-        "insample_acc": 78.6, "n_is": 14,
-        "desc" : "L4 broke with bullish EMA — extreme overextension, look for SHORT",
-    }
-    # 4. L2+ break + VWAP + EMA bearish (63.9%)
-    signals["L2_VWAP_EMA_bear_SHORT"] = {
-        "mask" : (md >= 2) & (vs < 0) & (es < -0.0005),
-        "dir"  : "SHORT", "tier": "STRONG",
-        "insample_acc": 63.9, "n_is": 61,
-        "desc" : "L2+ broke + VWAP + EMA both bearish — high confluence SHORT",
-    }
-    # 5. L2+ break + EMA bearish (62.2%)
-    signals["L2_EMA_bear_SHORT"] = {
-        "mask" : (md >= 2) & (es < -0.0005),
-        "dir"  : "SHORT", "tier": "STRONG",
-        "insample_acc": 62.2, "n_is": 74,
-        "desc" : "L2+ broke + EMA bearish — trend following SHORT",
-    }
-    # 6. L2+ break + VWAP bearish (60.3%)
-    signals["L2_VWAP_bear_SHORT"] = {
-        "mask" : (md >= 2) & (vs < 0),
-        "dir"  : "SHORT", "tier": "MODERATE",
-        "insample_acc": 60.3, "n_is": 78,
-        "desc" : "L2+ broke + VWAP bearish — moderate SHORT signal",
-    }
-    # 7. U3→U2→U1 declining highs (SHORT)
-    def declining_highs(df):
-        mask = np.zeros(len(df), dtype=bool)
-        mu_arr = df["max_up"].values if "max_up" in df.columns else np.zeros(len(df))
-        for i in range(2, len(df)):
-            if (mu_arr[i-2] >= 3 and
-                mu_arr[i-1] >= 2 and mu_arr[i-1] < 3 and
-                mu_arr[i]   >= 1 and mu_arr[i]   < 2):
-                mask[i] = True
-        return mask
-    signals["U3_U2_U1_declining_SHORT"] = {
-        "mask" : declining_highs(df),
-        "dir"  : "SHORT", "tier": "MODERATE",
-        "insample_acc": 60.0, "n_is": 20,
-        "desc" : "3-session declining highs: U3→U2→U1 — upside exhausting",
-    }
-    # 8. U1 false break → SHORT next (38.9%... included but marked AVOID)
-    signals["U1_false_break_SHORT"] = {
-        "mask" : (mu >= 1) & (md >= 1) & (mu < 2),
-        "dir"  : "SHORT", "tier": "MODERATE",
-        "insample_acc": 38.9, "n_is": 18,
-        "desc" : "Hit U1+L1 same sess (ranging), watch for next L2+ breakdown",
-    }
-    # 9. L2→retest→L3 (2-session sequence, 60.5%)
-    def l2_retest_l3(df):
-        mask = np.zeros(len(df), dtype=bool)
-        md_arr = df["max_down"].values if "max_down" in df.columns else np.zeros(len(df))
-        mu_arr = df["max_up"].values if "max_up" in df.columns else np.zeros(len(df))
-        for i in range(2, len(df)):
-            if (md_arr[i-2] >= 2 and
-                md_arr[i-1] >= 1 and md_arr[i-1] < 2 and mu_arr[i-1] < 1 and
-                md_arr[i]   >= 3):
-                mask[i] = True
-        return mask
-    signals["L2_retest_L3_SHORT"] = {
-        "mask" : l2_retest_l3(df),
-        "dir"  : "SHORT", "tier": "MODERATE",
-        "insample_acc": 60.5, "n_is": 38,
-        "desc" : "L2 break → retest at L1 → L3 continuation",
-    }
-    # 10. L2→pullback→L3 (75%, small n)
-    def l2_pullback_l3(df):
-        mask = np.zeros(len(df), dtype=bool)
-        md_arr = df["max_down"].values if "max_down" in df.columns else np.zeros(len(df))
-        mu_arr = df["max_up"].values if "max_up" in df.columns else np.zeros(len(df))
-        for i in range(2, len(df)):
-            if (md_arr[i-2] >= 2 and
-                mu_arr[i-1] >= 1 and md_arr[i-1] < 2 and
-                md_arr[i]   >= 3):
-                mask[i] = True
-        return mask
-    signals["L2_pullback_L3_SHORT"] = {
-        "mask" : l2_pullback_l3(df),
-        "dir"  : "SHORT", "tier": "MODERATE",
-        "insample_acc": 75.0, "n_is": 4,
-        "desc" : "L2 break → pullback to U1 → L3 continuation",
-    }
-    # 11. BEST_SHORT_combo: L2+ + EMA bearish + DXY rising (60%)
-    signals["BEST_SHORT_macro_combo"] = {
-        "mask" : (md >= 2) & (es < -0.0005) & (ds > 0),
-        "dir"  : "SHORT", "tier": "STRONG",
-        "insample_acc": 60.0, "n_is": 45,
-        "desc" : "L2+ broke + EMA bearish + DXY rising — full macro SHORT",
-    }
-    # 12. Range→Range→L2+ breakdown
-    def range_breakdown(df):
-        mask = np.zeros(len(df), dtype=bool)
-        ibd_arr = df["is_bidir"].values if "is_bidir" in df.columns else np.zeros(len(df))
-        md_arr  = df["max_down"].values if "max_down" in df.columns else np.zeros(len(df))
-        mu_arr  = df["max_up"].values if "max_up" in df.columns else np.zeros(len(df))
-        for i in range(2, len(df)):
-            if (ibd_arr[i-2] == 1 and
-                ibd_arr[i-1] == 1 and
-                md_arr[i] >= 2 and mu_arr[i] < 1):
-                mask[i] = True
-        return mask
-    signals["Range_breakdown_SHORT"] = {
-        "mask" : range_breakdown(df),
-        "dir"  : "SHORT", "tier": "MODERATE",
-        "insample_acc": 60.0, "n_is": 8,
-        "desc" : "2 ranging sessions then clean L2+ breakdown",
-    }
-
-    # ── RANGING (STAY OUT) signals ────────────────────────────────────────
-    signals["STAY_OUT_flip_rate"] = {
-        "mask" : flp >= 35,
-        "dir"  : "NEUTRAL", "tier": "RANGING",
-        "insample_acc": np.nan, "n_is": 29,
-        "desc" : "Flip rate ≥35% — market bidirectional and choppy",
-    }
-    signals["STAY_OUT_l1u1_trapped"] = {
-        "mask" : (md >= 1) & (mu >= 1) & (md < 2) & (mu < 2),
-        "dir"  : "NEUTRAL", "tier": "RANGING",
-        "insample_acc": np.nan, "n_is": 192,
-        "desc" : "Hit L1 AND U1 same session but NOT L2 or U2 — ranging/trapped",
-    }
-    signals["STAY_OUT_no_break"] = {
-        "mask" : (mu < 1) & (md < 1),
-        "dir"  : "NEUTRAL", "tier": "RANGING",
-        "insample_acc": np.nan, "n_is": 741,
-        "desc" : "No level broken at all — pure consolidation, stay out",
-    }
-
+    for r in signal_rules.RULES:
+        mask = np.array([r["key"] in ALL_FIRED[offset + i] for i in range(len(df))], dtype=bool)
+        signals[r["key"]] = {
+            "mask": mask, "dir": r["dir"], "tier": r["tier"],
+            "insample_acc": r["is_acc"] if r["is_acc"] is not None else np.nan,
+            "enabled": r["enabled"], "desc": r["desc"],
+        }
     return signals
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  COMPUTE IN-SAMPLE AND OOS ACCURACY FOR EVERY SIGNAL
 # ─────────────────────────────────────────────────────────────────────────────
-sigs_is  = define_signals(insample)
-sigs_oos = define_signals(oos)
+sigs_is  = define_signals(insample, 0)
+sigs_oos = define_signals(oos, split_idx)
 
 P("\n" + "=" * 72)
 P("  FORWARD TEST RESULTS — OOS vs IN-SAMPLE COMPARISON")
@@ -491,51 +224,17 @@ P()
 P("  ── PER-SESSION SIGNAL LABELS (OOS) ────────────────────────────────")
 
 session_output = oos[["date","max_up","max_down"]].copy()
+session_output["sess_start"] = session_output["date"]
 session_output["date"] = session_output["date"].dt.date
 
 # Priority: STRONG > MODERATE | LONG vs SHORT | STAY_OUT last
-oos_sigs = define_signals(oos)
+oos_sigs = define_signals(oos, split_idx)
 
 def get_label(i):
-    row_signals = []
-    for sname, sv in oos_sigs.items():
-        mask = sv["mask"]
-        if isinstance(mask, np.ndarray):
-            if i >= len(mask) or not mask[i]: continue
-        else:
-            if not mask.iloc[i]: continue
-        row_signals.append((sname, sv["dir"], sv["tier"], sv.get("insample_acc",0)))
+    """Shared label logic (signal_rules.classify) — identical to the live notifier."""
+    c = signal_rules.classify_at(ALL_RECS, split_idx + i)
+    return c["label"], c["direction"], [x["key"] for x in c["signals"]], c["confidence"]
 
-    if not row_signals:
-        return "NO SIGNAL", "NEUTRAL", [], 0
-
-    # Sort: STRONG first, then by in-sample accuracy
-    tier_order = {"STRONG":0, "MODERATE":1, "RANGING":2}
-    row_signals.sort(key=lambda x: (tier_order.get(x[2],3), -x[3]))
-
-    # Check for conflict (LONG vs SHORT STRONG signals)
-    strong = [s for s in row_signals if s[2]=="STRONG"]
-    long_strong  = [s for s in strong if s[1]=="LONG"]
-    short_strong = [s for s in strong if s[1]=="SHORT"]
-    if long_strong and short_strong:
-        return "CONFLICTED", "NEUTRAL", [s[0] for s in row_signals], 0
-
-    # Check STAY OUT first
-    if any(s[1]=="NEUTRAL" for s in row_signals):
-        non_neutral = [s for s in row_signals if s[1]!="NEUTRAL"]
-        if not non_neutral:
-            return "STAY OUT — RANGING", "NEUTRAL", [s[0] for s in row_signals], 0
-
-    # Get primary direction
-    primary = row_signals[0]
-    label_base = "LOOK FOR LONGS" if primary[1]=="LONG" else "LOOK FOR SHORTS"
-    strength = primary[2]
-    confidence = primary[3]
-    active = [s[0] for s in row_signals if s[1]==primary[1]]
-    multi = len(active) > 1
-
-    label = f"{label_base} [{strength}{'+ CONFLUENCE' if multi else ''}]"
-    return label, primary[1], active, confidence
 
 labels = []; dirs = []; active_sigs = []; confs = []
 for i in range(N_oos):
