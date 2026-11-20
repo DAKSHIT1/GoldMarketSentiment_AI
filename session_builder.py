@@ -40,6 +40,22 @@ ROLL_COLS = ["roll_p_u2_u1", "roll_p_l2_l1", "roll_p_l3_l1",
              "roll_l3plus_pct", "roll_l1_freq"]
 
 
+def tradable_bars(bars):
+    """
+    Keep only bars from real trading sessions.
+
+    Since 2025 the TwelveData XAU/USD feed also prints weekend OTC quotes
+    (Fri 17:00 → Sun 18:00 NY) and bars inside the 17:00–18:00 daily break.
+    They are not tradable, they create flat pseudo-sessions (Fri 18:00 / Sat 18:00)
+    and they were absent from 2020–2024 history. A session is keyed by its
+    18:00 start day; Friday- and Saturday-start sessions are dropped, as is hour 17.
+    """
+    dt = bars["datetime"]
+    start_dow = (dt - pd.Timedelta(hours=18)).dt.day_of_week
+    keep = ~start_dow.isin([4, 5]) & (dt.dt.hour != 17)
+    return bars[keep.to_numpy()].reset_index(drop=True)
+
+
 def tag_sessions(bars, start_id=0):
     """Session id increments at every 18:00 New York bar (same as regime_features.py)."""
     start = (bars["datetime"].dt.hour == 18) & (bars["datetime"].dt.minute == 0)
@@ -176,6 +192,25 @@ def classify_v2(row):
             return "SHORT_EXHAUST"
 
     return "NEUTRAL"
+
+
+FORWARD_SESSIONS = 10
+
+
+def fill_forward_cols(sess, forward=FORWARD_SESSIONS):
+    """Research-only columns (open of i → close of i+forward), same as regime_rules_v2."""
+    o = sess["sess_open"].to_numpy(float)
+    c = sess["sess_close"].to_numpy(float)
+    n = len(sess)
+    ret = np.full(n, np.nan); pts = np.full(n, np.nan); up = np.full(n, np.nan)
+    if n > forward:
+        s, e = o[:n - forward], c[forward:]
+        ok = s > 0
+        ret[:n - forward] = np.where(ok, np.round((e - s) / s * 100, 4), np.nan)
+        pts[:n - forward] = np.where(ok, np.round(e - s, 2), np.nan)
+        up[:n - forward] = np.where(ok, (e > s).astype(float), np.nan)
+    sess["fwd_ret"], sess["fwd_pts"], sess["fwd_up"], sess["fwd_down"] = ret, pts, up, 1.0 - up
+    return sess
 
 
 def session_is_complete(sess_start, last_bar_in_session, next_session_exists):

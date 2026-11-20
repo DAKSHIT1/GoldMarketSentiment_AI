@@ -137,6 +137,13 @@ def load_sessions():
     return df.sort_values("date").reset_index(drop=True)
 
 
+def entry_index(sess, trade):
+    """Row of the entry session; if that row was removed by a data repair,
+    the last session that started on/before the entry."""
+    d = sess["date"].to_numpy()
+    return int(max(0, (d <= np.datetime64(pd.Timestamp(trade["entry_session"]))).sum() - 1))
+
+
 def skey(ts):
     return f"{pd.Timestamp(ts):%Y-%m-%d %H:%M}"
 
@@ -187,7 +194,7 @@ def record_txt(state):
 def open_trade_txt(trade, sess, i):
     if not trade:
         return "  None — flat, waiting for the next signal."
-    e_idx = int(sess.index[sess["date"] == pd.Timestamp(trade["entry_session"])][0])
+    e_idx = entry_index(sess, trade)
     done = i - e_idx
     last = float(sess["sess_close"].iloc[i])
     unreal = (last / trade["entry_close"] - 1) * 100
@@ -196,9 +203,9 @@ def open_trade_txt(trade, sess, i):
             f"  Exit: close of session {HOLD} (≈ {est_exit_day(sess, i, HOLD - done)})")
 
 
-BACKTEST_TXT = ("2020–26 backtest (10-session, no stop, 0.02% cost): 89 trades, 60% win, "
-                "+1.20%/trade, PF 2.67, max DD −12.8%. Out-of-sample Jul-24→Nov-26: "
-                "34 trades, 64.7% win vs 59.3% base.")
+BACKTEST_TXT = ("2020–26 backtest (10-session, no stop, 0.02% cost): 87 trades, 59% win, "
+                "+1.20%/trade, PF 2.63, max DD −12.8%. Out-of-sample Jul-24→Nov-26: "
+                "32 trades, 62.5% win vs 60.5% base.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -286,7 +293,7 @@ def process_session(sess, i, state, catchup):
 
     trade = state["paper_trade"]
     if trade:
-        e_idx = int(sess.index[sess["date"] == pd.Timestamp(trade["entry_session"])][0])
+        e_idx = entry_index(sess, trade)
         if i - e_idx >= HOLD:
             exit_close = float(row["sess_close"])
             t = dict(trade, exit_session=skey(row["date"]), exit_close=exit_close,
