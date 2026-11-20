@@ -38,7 +38,7 @@ The only active rule is the **Macro Pullback** LONG (EMA falling + dollar fallin
     ```bash
     python dashboard/server.py
     ```
-4.  Open `http://localhost:5050/dashboard` in your browser. (Login: dakshit / gold2025)
+4.  Open `http://localhost:5050/dashboard` in your browser and sign in with your dashboard credentials.
 
 ## 📁 Repository Structure
 

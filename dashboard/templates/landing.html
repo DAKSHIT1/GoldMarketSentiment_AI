@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Gold.ai — Quantitative Gold Trading Intelligence</title>
-<meta name="description" content="Session-level XAU/USD signal engine. 72.5% OOS accuracy. LONG/SHORT/STAY COOL signals built on 6 years of rigorous backtesting."/>
+<meta name="description" content="Session-level XAU/USD macro signal. One validated rule (EMA falling + dollar falling, LONG, 10-session hold), forward paper traded. Built on 6+ years of lookahead-free backtesting."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
@@ -219,7 +219,7 @@ footer{background:var(--bg);border-top:1px solid var(--border);
     </h1>
     <p class="hero-sub">
       Session-level XAU/USD analysis. Quantified confidence scoring. Market regime detection.<br>
-      Built on 6 years of rigorous backtesting across 1,628 trading sessions.
+      Built on 6+ years of lookahead-free backtesting across 1,762 trading sessions.
     </p>
     <div class="hero-buttons">
       <a href="/login" class="btn-primary">Launch App →</a>
@@ -232,24 +232,24 @@ footer{background:var(--bg);border-top:1px solid var(--border);
 <section class="stats-section">
   <div class="stats-grid">
     <div class="stat-box">
-      <div class="stat-num" data-target="72.5" data-suffix="%">0%</div>
-      <div class="stat-label">Signal Accuracy</div>
-      <div class="stat-sub">OOS Forward Test 2025–26</div>
+      <div class="stat-num" data-target="1.8" data-suffix="%">0%</div>
+      <div class="stat-label">OOS Avg Return / Trade</div>
+      <div class="stat-sub">Jul 2024–Nov 2026 · vs +0.9% for any 10-session hold</div>
     </div>
     <div class="stat-box">
-      <div class="stat-num" data-target="499" data-suffix="">0</div>
-      <div class="stat-label">Combinations Tested</div>
-      <div class="stat-sub">26 Rules Survived → Deployed</div>
+      <div class="stat-num" data-target="88" data-suffix="">0</div>
+      <div class="stat-label">Backtest Trades</div>
+      <div class="stat-sub">2020–26 · one at a time · after 0.02% cost</div>
     </div>
     <div class="stat-box">
-      <div class="stat-num" data-target="4.4" data-suffix="/mo">0</div>
-      <div class="stat-label">Quality Signals / Month</div>
-      <div class="stat-sub">Precision over frequency</div>
+      <div class="stat-num" data-target="1.1" data-suffix="/mo">0</div>
+      <div class="stat-label">Signals / Month</div>
+      <div class="stat-sub">One trade at a time · 10-session hold</div>
     </div>
     <div class="stat-box">
       <div class="stat-num" data-target="6" data-suffix=" Yrs">0</div>
       <div class="stat-label">Historical Data Tested</div>
-      <div class="stat-sub">$1,472 – $5,414 · Jan 2020–Mar 2026</div>
+      <div class="stat-sub">$1,451 – $5,597 · Jan 2020–Nov 2026</div>
     </div>
   </div>
 </section>
@@ -265,12 +265,12 @@ footer{background:var(--bg);border-top:1px solid var(--border);
     <div class="feature-card">
       <div class="feature-icon">⚡</div>
       <div class="feature-title">Quantitative Signal Engine</div>
-      <div class="feature-desc">LONG / SHORT / STAY COOL signals from 26 high-confidence rules — tested across 1,628 XAU/USD sessions with zero look-ahead bias.</div>
+      <div class="feature-desc">One active LONG rule — EMA200 slope falling and the dollar (UUP) falling at the session open — validated across 1,762 XAU/USD sessions with zero look-ahead bias. The 26 older level rules are archived.</div>
     </div>
     <div class="feature-card">
       <div class="feature-icon">🎯</div>
       <div class="feature-title">Confidence Score Engine</div>
-      <div class="feature-desc">OOS-calibrated accuracy on every signal. LONG: 72.5% · L4 SHORT overextension: 72.7%. No guessing — every signal is quantified.</div>
+      <div class="feature-desc">Walk-forward validated: discovery 2020–mid-2024, out-of-sample Jul 2024–Nov 2026, and checked against random entries. Every figure is after trading costs.</div>
     </div>
     <div class="feature-card">
       <div class="feature-icon">📊</div>
@@ -304,12 +304,12 @@ footer{background:var(--bg);border-top:1px solid var(--border);
       <div class="hiw-step">
         <div class="step-num">1</div>
         <div class="step-title">🔍 Data Engine</div>
-        <div class="step-desc">1,628 daily XAU/USD sessions processed. EMA slope, VWAP slope, DXY slope, and our 8-level price structure (U1–U8 upper, L1–L8 lower) computed for every session.</div>
+        <div class="step-desc">1,762 daily XAU/USD sessions processed. EMA slope, VWAP slope, DXY slope, and our 8-level price structure (U1–U8 upper, L1–L8 lower) computed for every session.</div>
       </div>
       <div class="hiw-step">
         <div class="step-num">2</div>
         <div class="step-title">⚡ Signal Engine</div>
-        <div class="step-desc">499 rule combinations tested. 26 survived rigorous OOS validation. System outputs LOOK FOR LONGS, LOOK FOR SHORTS, or STAY COOL with a calibrated confidence score.</div>
+        <div class="step-desc">Hundreds of level, sequence and macro rules re-tested without look-ahead. One survived: the Macro Pullback LONG, now forward paper traded with Telegram alerts on every open and close.</div>
       </div>
       <div class="hiw-step">
         <div class="step-num">3</div>
@@ -326,48 +326,48 @@ footer{background:var(--bg);border-top:1px solid var(--border);
   <div class="section-title">Real results. Real data. <span class="gold">No hype.</span></div>
   <div class="numbers-card">
     <div style="font-size:0.82rem;color:var(--gray);margin-bottom:0.5rem">
-      Out-of-sample forward test · March 2025 – March 2026 · XAU/USD daily sessions
+      Macro Pullback LONG · lookahead-free backtest Jan 2020 – Nov 2026 · 10-session hold, no stop, 0.02% cost · paper traded live
     </div>
     <div class="numbers-grid">
       <div class="number-item">
-        <div class="number-val">72.5%</div>
-        <div class="number-lbl">LONG Signal Accuracy</div>
-        <div class="number-ctx">95 of 131 signals · OOS only</div>
+        <div class="number-val">59%</div>
+        <div class="number-lbl">Win Rate</div>
+        <div class="number-ctx">88 trades · 2020–26</div>
       </div>
       <div class="number-item">
-        <div class="number-val">72.7%</div>
-        <div class="number-lbl">L4 Overextension SHORT</div>
-        <div class="number-ctx">Strong OOS signals only</div>
+        <div class="number-val">+1.27%</div>
+        <div class="number-lbl">Avg Net Return / Trade</div>
+        <div class="number-ctx">After costs · 10-session hold</div>
       </div>
       <div class="number-item">
-        <div class="number-val">+4.77%</div>
-        <div class="number-lbl">Avg Peak Gain (LONG)</div>
-        <div class="number-ctx">~$92/oz per signal</div>
+        <div class="number-val">2.75</div>
+        <div class="number-lbl">Profit Factor</div>
+        <div class="number-ctx">Gross wins ÷ gross losses</div>
       </div>
       <div class="number-item">
-        <div class="number-val">+2.34%</div>
-        <div class="number-lbl">Avg Net Return (LONG)</div>
-        <div class="number-ctx">~$45/oz · 10-session hold</div>
+        <div class="number-val">−12.8%</div>
+        <div class="number-lbl">Max Drawdown</div>
+        <div class="number-ctx">Paper equity · 2020–26</div>
       </div>
       <div class="number-item">
-        <div class="number-val">4.4</div>
-        <div class="number-lbl">Signals / Month</div>
-        <div class="number-ctx">Quality over quantity</div>
+        <div class="number-val">1.30</div>
+        <div class="number-lbl">Sharpe Ratio</div>
+        <div class="number-ctx">Beats all 300 random-entry runs</div>
       </div>
       <div class="number-item">
-        <div class="number-val">39.7%</div>
-        <div class="number-lbl">LONG signals with &gt;5% peak</div>
-        <div class="number-ctx">Big move sessions</div>
+        <div class="number-val">+1.80%</div>
+        <div class="number-lbl">Out-of-Sample Avg Return</div>
+        <div class="number-ctx">32 trades Jul 2024–Nov 2026 · vs +0.90% base</div>
       </div>
       <div class="number-item">
-        <div class="number-val">1,628</div>
+        <div class="number-val">1,762</div>
         <div class="number-lbl">Sessions Tested</div>
-        <div class="number-ctx">Jan 2020 – Mar 2026</div>
+        <div class="number-ctx">Jan 2020 – Nov 2026</div>
       </div>
       <div class="number-item">
-        <div class="number-val">499→26</div>
-        <div class="number-lbl">Rules: Tested → Deployed</div>
-        <div class="number-ctx">Rigorous survival filter</div>
+        <div class="number-val">1</div>
+        <div class="number-lbl">Rule Deployed</div>
+        <div class="number-ctx">26 older rules archived after re-validation</div>
       </div>
     </div>
   </div>
