@@ -1,0 +1,10 @@
+{
+  "closed_trades": [],
+  "last_processed": "2026-11-18 18:00",
+  "paper_trade": null,
+  "sent": {
+    "armed:v1": {
+      "sent_at": "2026-11-20T11:51:50+00:00"
+    }
+  }
+}
