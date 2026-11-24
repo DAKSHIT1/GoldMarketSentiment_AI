@@ -1,0 +1,68 @@
+name: Level Rejection Alerts
+
+# Standalone 30m Level Rejection Scanner (level_rejection_scanner.py).
+# Independent of the Macro Pullback workflow. Silent unless the latest closed 30m
+# candle cleanly rejects a Daily level.
+# - workflow_dispatch: ping at exact :00 / :30 from an external scheduler (cron-job.org).
+# - schedule: fallback every 30 min Mon-Fri (UTC), plus Sunday from 22:00 UTC.
+#   Dedup (state/level_rejection_state.json) makes a double-run a no-op.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Print only, do not send Telegram'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: '1,31 * * * 1-5'
+    - cron: '1,31 22,23 * * 0'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: level-rejection
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      TWELVEDATA_API_KEY: ${{ secrets.TWELVEDATA_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pandas==2.3.3 numpy==2.4.2 requests==2.32.5
+
+      - name: Scan latest closed 30m candle
+        run: |
+          if [ "${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}" = "true" ]; then
+            python level_rejection_scanner.py --dry-run
+          else
+            python level_rejection_scanner.py
+          fi
+
+      - name: Commit dedup state
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        run: |
+          [ -f state/level_rejection_state.json ] || exit 0
+          git config user.name  "gold-ai-bot"
+          git config user.email "gold-ai-bot@users.noreply.github.com"
+          git add state/level_rejection_state.json
+          git diff --cached --quiet && { echo "Nothing to commit"; exit 0; }
+          git commit -m "chore: level rejection state [skip ci]"
+          for attempt in 1 2 3 4 5; do
+            if git pull --rebase -X theirs --autostash && git push; then exit 0; fi
+            git rebase --abort 2>/dev/null || true
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not push dedup state"; exit 1
